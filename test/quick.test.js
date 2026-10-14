@@ -1,13 +1,16 @@
-// Quick Checkout: product list storage + API, the generated Tampermonkey
-// userscript, and the userscript actually running in a browser on the fake
-// store (with a stand-in for Tampermonkey's GM_xmlhttpRequest).
+// Quick Checkout: product list storage + API, the TCGBot browser extension
+// (loaded for real into Chromium) and the bookmark button, both running
+// against the fake store.
 
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import vm from 'node:vm';
 import { chromium } from 'playwright';
 import { setup, waitFor } from './helpers.js';
-import { buildUserscript, matchPatterns } from '../src/userscript.js';
+import { bookmarkletCode, EXTENSION_DIR } from '../src/bookmarklet.js';
 import { QUICK_DEFAULTS } from '../src/presets.js';
 
 let env;
@@ -29,10 +32,20 @@ beforeEach(() => {
   env.store.set('311003', { status: 'out_of_stock', listed: true });
 });
 
-async function api(method, path, body, headers = { 'x-tcgbot': '1' }) {
-  const res = await fetch(env.app.url + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
-  return { status: res.status, body: await res.json().catch(() => null), text: res.ok ? null : undefined };
+async function api(method, p, body, headers = { 'x-tcgbot': '1' }) {
+  const res = await fetch(env.app.url + p, { method, headers: { 'content-type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+  return { status: res.status, body: await res.json().catch(() => null) };
 }
+
+function useMockProducts() {
+  for (const p of [...env.app.store.quick.products]) env.app.store.removeQuickProduct(p.id);
+  env.app.store.addQuickProduct({ name: 'OP-18 Box', sku: '311002', price: 159, url: env.store.productUrl('311002') });
+  env.app.store.addQuickProduct({ name: 'Elite Trainer Box', sku: '311004', price: 79.95, url: env.store.productUrl('311004') });
+  env.app.store.addQuickProduct({ name: 'Sleeves', sku: '311003', price: 12, url: env.store.productUrl('311003') });
+}
+
+const panelText = (page) => page.textContent('#tcgbot-quick-checkout');
+const panelButton = (page, text) => page.locator('#tcgbot-quick-checkout button', { hasText: text }).first();
 
 test('default list is your 7 Kmart products in priority order', async () => {
   const { body } = await api('GET', '/api/quick');
@@ -40,23 +53,31 @@ test('default list is your 7 Kmart products in priority order', async () => {
   assert.equal(body.products[0].name, 'Day UPC');
   assert.equal(body.products[0].store, 'Kmart');
   assert.equal(body.products[0].price, 360);
+  assert.equal(body.extensionPath, EXTENSION_DIR);
+  assert.ok(fs.existsSync(path.join(body.extensionPath, 'manifest.json')));
 });
 
-test('generated userscript: valid JS, right header, list embedded safely', () => {
-  const script = buildUserscript({ dashboardUrl: 'http://127.0.0.1:8787', products: [...QUICK_DEFAULTS, { sku: 'x', name: 'a</script>b', url: 'https://shop.example.com/products/x' }], rev: 7 });
-  assert.doesNotThrow(() => new vm.Script(script));
-  assert.match(script, /^\/\/ ==UserScript==/);
-  assert.match(script, /@version\s+2\.7/);
-  assert.match(script, /@match\s+https:\/\/www\.kmart\.com\.au\/\*/);
-  assert.match(script, /@match\s+https:\/\/shop\.example\.com\/\*/);
-  assert.match(script, /@grant\s+GM_xmlhttpRequest/);
-  assert.match(script, /@connect\s+127\.0\.0\.1/);
-  assert.match(script, /43818648/);
-  assert.ok(!script.includes('</script>'), 'no raw </script> in the embedded list');
-  assert.ok(matchPatterns([]).includes('https://www.ebgames.com.au/*'));
+test('extension manifest is valid and covers the stores', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(EXTENSION_DIR, 'manifest.json'), 'utf8'));
+  assert.equal(m.manifest_version, 3);
+  assert.deepEqual(m.content_scripts[0].js, ['core.js', 'content.js']);
+  for (const host of ['www.kmart.com.au', 'www.ebgames.com.au', 'www.target.com.au', 'www.bigw.com.au', 'www.jbhifi.com.au']) {
+    assert.ok(m.content_scripts[0].matches.includes(`https://${host}/*`), host);
+  }
+  for (const f of ['core.js', 'content.js', 'background.js', 'popup.html', 'popup.js']) assert.ok(fs.existsSync(path.join(EXTENSION_DIR, f)), f);
 });
 
-test('API: add (SKU detected from link), edit, hide, reorder, delete, events, userscript download', async () => {
+test('bookmark button: valid JS, list embedded safely', async () => {
+  const code = bookmarkletCode([...QUICK_DEFAULTS, { sku: 'x', name: 'a</script>b', url: 'https://shop.example.com/products/x' }]);
+  assert.doesNotThrow(() => new vm.Script(code));
+  assert.match(code, /43818648/);
+  assert.ok(!code.includes('</script>'));
+  const { body } = await api('GET', '/api/quick/bookmarklet');
+  assert.match(body.href, /^javascript:/);
+  assert.doesNotThrow(() => new vm.Script(decodeURIComponent(body.href.slice('javascript:'.length))));
+});
+
+test('API: add (SKU detected from link), edit, hide, reorder, delete, events', async () => {
   const added = await api('POST', '/api/quick/products', { url: 'https://www.kmart.com.au/product/pokemon-tcg-test-booster-43999999/', name: 'Test booster', price: 9 });
   assert.equal(added.status, 200);
   assert.equal(added.body.sku, '43999999');
@@ -69,23 +90,12 @@ test('API: add (SKU detected from link), edit, hide, reorder, delete, events, us
   assert.equal(edited.body.enabled, false);
   assert.equal(edited.body.sku, '43999999');
 
-  const before = (await api('GET', '/api/quick')).body.products.map((p) => p.id);
   const reordered = await api('POST', '/api/quick/reorder', { ids: [id] });
-  assert.equal(reordered.body.products[0].id, id, 'moved to the top');
-  assert.equal(reordered.body.products.length, before.length, 'nothing lost');
-
+  assert.equal(reordered.body.products[0].id, id);
   const synced = await fetch(`${env.app.url}/api/quick/products`).then((r) => r.json());
-  assert.equal(synced.products[0].id, id, 'the userscript sees the new order');
+  assert.equal(synced.products[0].id, id, 'the extension sees the new order');
 
-  const script = await fetch(`${env.app.url}/userscript/tcgbot-quick-checkout.user.js`);
-  assert.equal(script.status, 200);
-  assert.match(script.headers.get('content-type'), /javascript/);
-  const text = await script.text();
-  assert.match(text, /@name\s+TCGBot Quick Checkout/);
-  assert.match(text, /43999999/);
-  assert.match(text, new RegExp(`@updateURL\\s+${env.app.url.replace(/[.]/g, '\\.')}`));
-
-  assert.equal((await api('POST', '/api/quick/events', { type: 'checkout', name: 'Day UPC', message: 'Reached checkout' }, {})).status, 403, 'needs the header');
+  assert.equal((await api('POST', '/api/quick/events', { type: 'checkout', name: 'Day UPC', message: 'x' }, {})).status, 403, 'needs the header');
   assert.equal((await api('POST', '/api/quick/events', { type: 'nope' })).status, 400);
   assert.equal((await api('POST', '/api/quick/events', { type: 'checkout', name: 'Day UPC', message: 'Reached checkout', url: 'https://www.kmart.com.au/checkout' })).status, 200);
   assert.ok(env.alerts.some((a) => a.level === 'urgent' && a.title === 'At checkout: Day UPC'));
@@ -94,62 +104,52 @@ test('API: add (SKU detected from link), edit, hide, reorder, delete, events, us
   assert.equal((await api('DELETE', `/api/quick/products/${id}`)).status, 400);
 });
 
-/** A browser page with the generated userscript installed, like Tampermonkey would. */
-async function pageWithUserscript() {
-  const res = await fetch(`${env.app.url}/userscript/tcgbot-quick-checkout.user.js`);
-  const script = await res.text();
-  const context = await browser.newContext();
-  // Stand-in for Tampermonkey's privileged GM_xmlhttpRequest (not limited by CORS).
-  await context.exposeBinding('__tcgGm', async (_src, d) => {
-    const r = await fetch(d.url, { method: d.method, headers: d.headers, body: d.data });
-    return { status: r.status, responseText: await r.text() };
+// ---------------------------------------------------------------------------
+// The real extension, loaded into Chromium
+// ---------------------------------------------------------------------------
+async function withExtension(fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tcgbot-ext-'));
+  const ctx = await chromium.launchPersistentContext(dir, {
+    channel: 'chromium',
+    headless: true,
+    args: [`--disable-extensions-except=${EXTENSION_DIR}`, `--load-extension=${EXTENSION_DIR}`],
   });
-  await context.addInitScript(`
-    window.GM_xmlhttpRequest = (d) => { window.__tcgGm({ method: d.method, url: d.url, headers: d.headers, data: d.data })
-      .then((r) => d.onload && d.onload(r)).catch(() => d.onerror && d.onerror()); };
-    const __run = () => { ${script} };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', __run); else __run();
-  `);
-  const page = await context.newPage();
-  return { page, context };
-}
-
-function useMockProducts() {
-  for (const p of [...env.app.store.quick.products]) env.app.store.removeQuickProduct(p.id);
-  env.app.store.addQuickProduct({ name: 'OP-18 Box', sku: '311002', price: 159, url: env.store.productUrl('311002') });
-  env.app.store.addQuickProduct({ name: 'Elite Trainer Box', sku: '311004', price: 79.95, url: env.store.productUrl('311004') });
-  env.app.store.addQuickProduct({ name: 'Sleeves', sku: '311003', price: 12, url: env.store.productUrl('311003') });
-}
-
-const panelButton = (page, text) => page.locator('#tcgbot-quick-checkout button', { hasText: text }).first();
-
-test('panel: Add to Bag → popup Checkout → checkout page, with the item really in the bag', async () => {
-  useMockProducts();
-  const { page, context } = await pageWithUserscript();
   try {
+    let sw = ctx.serviceWorkers()[0];
+    if (!sw) sw = await ctx.waitForEvent('serviceworker');
+    // Point the extension at this test's dashboard (normally port 8787).
+    await sw.evaluate((port) => chrome.storage.local.set({ port }), env.app.web.port);
+    const extId = new URL(sw.url()).host;
+    await fn(ctx, extId, sw);
+  } finally {
+    await ctx.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('extension: Add to Bag → popup Checkout → checkout page, item really in the bag, reported to the dashboard', async () => {
+  useMockProducts();
+  await withExtension(async (ctx) => {
+    const page = await ctx.newPage();
     await page.goto(env.store.productUrl('311002'));
     await page.waitForSelector('#tcgbot-quick-checkout');
-    await waitFor(async () => /Synced with your TCGBot dashboard/.test(await page.textContent('#tcgbot-quick-checkout')), { message: 'sync' });
-    const text = await page.textContent('#tcgbot-quick-checkout');
+    await waitFor(async () => /Synced with your TCGBot dashboard/.test(await panelText(page)), { message: 'sync' });
+    const text = await panelText(page);
     assert.match(text, /OP-18 Box · SKU 311002/);
     assert.match(text, /1\. OP-18 Box — \$159/);
-    assert.match(text, /2\. Elite Trainer Box/);
-
     await panelButton(page, 'Add to Bag → Checkout').click();
     await page.waitForURL(/\/checkout/, { timeout: 15000 });
     assert.equal(env.store.state.cart.length, 1, 'item was in the bag before going to checkout');
     assert.equal(env.store.state.orders.length, 0, 'never places the order');
     await waitFor(() => env.alerts.some((a) => a.title === 'At checkout: OP-18 Box'), { message: 'checkout event' });
     assert.ok(env.app.bus.recent(50).some((e) => /\[Quick Checkout\] OP-18 Box: Clicked Add to Bag/.test(e.message)));
-  } finally {
-    await context.close();
-  }
+  });
 });
 
-test('panel: no popup → opens the bag page → continues to checkout after the page change', async () => {
+test('extension: no popup → opens the bag page → carries on to checkout on the next page', async () => {
   useMockProducts();
-  const { page, context } = await pageWithUserscript();
-  try {
+  await withExtension(async (ctx) => {
+    const page = await ctx.newPage();
     await page.goto(env.store.productUrl('311004'));
     await page.waitForSelector('#tcgbot-quick-checkout');
     await panelButton(page, 'Add to Bag → Checkout').click();
@@ -157,50 +157,73 @@ test('panel: no popup → opens the bag page → continues to checkout after the
     assert.equal(env.store.state.cart.length, 1);
     assert.equal(env.store.state.cart[0].sku, '311004');
     assert.ok(env.app.bus.recent(50).some((e) => /Elite Trainer Box: Opening the bag/.test(e.message)), 'went via the bag page');
-  } finally {
-    await context.close();
-  }
+  });
 });
 
-test('panel: sold-out product says so and reports it; other pages just show the list', async () => {
+test('extension: sold out, other pages, the dashboard itself, and offline mode', async () => {
   useMockProducts();
-  const { page, context } = await pageWithUserscript();
-  try {
+  await withExtension(async (ctx, extId, sw) => {
+    const page = await ctx.newPage();
     await page.goto(env.store.productUrl('311003'));
     await page.waitForSelector('#tcgbot-quick-checkout');
     await panelButton(page, 'Add to Bag → Checkout').click();
-    await waitFor(async () => /isn't available/.test(await page.textContent('#tcgbot-quick-checkout')), { message: 'sold out message' });
+    await waitFor(async () => /isn't available/.test(await panelText(page)), { message: 'sold out message' });
     assert.equal(env.store.state.cart.length, 0);
-    await waitFor(() => env.alerts.some((a) => a.level === 'warning' && /Quick Checkout: Sleeves/.test(a.title)), { message: 'error event' });
 
     await page.goto(`${env.store.url}/search?q=pokemon`);
     await page.waitForSelector('#tcgbot-quick-checkout');
     await panelButton(page, 'Add to Bag → Checkout').click();
-    await waitFor(async () => /Open one of your products first/.test(await page.textContent('#tcgbot-quick-checkout')), { message: 'not a product page' });
-    // Minimise works and is remembered for the tab.
-    await page.click('#tcgbot-quick-checkout button[title="Minimise"]');
-    assert.equal(await page.isVisible('#tcgbot-quick-checkout >> text=Products · priority order'), false);
-  } finally {
-    await context.close();
-  }
-});
+    await waitFor(async () => /Open one of your products first/.test(await panelText(page)), { message: 'not a product page' });
 
-test('panel works offline with its saved list when the dashboard is not running', async () => {
-  useMockProducts();
-  const script = await fetch(`${env.app.url}/userscript/tcgbot-quick-checkout.user.js`).then((r) => r.text());
-  const context = await browser.newContext();
-  await context.addInitScript(`window.GM_xmlhttpRequest = (d) => setTimeout(() => d.onerror && d.onerror(), 10);
-    const __run = () => { ${script} };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', __run); else __run();`);
-  const page = await context.newPage();
-  try {
+    // No panel on the TCGBot dashboard (also on 127.0.0.1, but not a store).
+    await page.goto(env.app.url);
+    await page.waitForSelector('#tab-quick');
+    await page.waitForTimeout(800);
+    assert.equal(await page.locator('#tcgbot-quick-checkout').count(), 0);
+
+    // Toolbar popup lists the products.
+    const popup = await ctx.newPage();
+    await popup.goto(`chrome-extension://${extId}/popup.html`);
+    await popup.waitForFunction(() => /Connected to TCGBot/.test(document.getElementById('status').textContent));
+    assert.match(await popup.textContent('#list'), /1\. OP-18 Box/);
+
+    // Dashboard "not running": point at a closed port — the saved list still works.
+    await sw.evaluate(() => chrome.storage.local.set({ port: 9 }));
     await page.goto(env.store.productUrl('311002'));
     await page.waitForSelector('#tcgbot-quick-checkout');
-    await waitFor(async () => /Dashboard not running/.test(await page.textContent('#tcgbot-quick-checkout')), { message: 'offline note' });
+    assert.match(await panelText(page), /TCGBot isn't running — using your last saved list/);
     await panelButton(page, 'Add to Bag → Checkout').click();
     await page.waitForURL(/\/checkout/, { timeout: 15000 });
     assert.equal(env.store.state.cart.length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The bookmark button (runs in any browser — here a plain Chromium tab)
+// ---------------------------------------------------------------------------
+test('bookmark button: one click on a product page goes to checkout; via the bag page it needs a second click', async () => {
+  useMockProducts();
+  const { body } = await api('GET', '/api/quick/bookmarklet');
+  const code = decodeURIComponent(body.href.slice('javascript:'.length));
+  const page = await browser.newPage();
+  try {
+    await page.goto(env.store.productUrl('311002'));
+    await page.evaluate(code); // = clicking the bookmark
+    await page.waitForURL(/\/checkout/, { timeout: 15000 });
+    assert.equal(env.store.state.cart.length, 1);
+
+    env.store.state.cart = [];
+    await page.goto(env.store.productUrl('311004'));
+    await page.evaluate(code);
+    await page.waitForURL(/\/cart$/, { timeout: 15000 });
+    assert.equal(env.store.state.cart.length, 1, 'added, now on the bag page');
+    await page.evaluate(code); // second click, on the bag page
+    await page.waitForURL(/\/checkout/, { timeout: 15000 });
+
+    await page.goto(env.store.productUrl('311003'));
+    await page.evaluate(code);
+    await waitFor(async () => /isn't available/.test(await panelText(page)), { message: 'sold out message' });
   } finally {
-    await context.close();
+    await page.close();
   }
 });

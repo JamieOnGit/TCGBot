@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TCGBot Quick Checkout</title>
+  <style>
+    body { width: 320px; margin: 0; padding: 14px; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: #172033; }
+    h1 { font-size: 15px; margin: 0 0 6px; }
+    .muted { color: #5b6474; font-size: 12px; }
+    button, a.btn { display: block; width: 100%; box-sizing: border-box; text-align: left; padding: 8px 10px; margin-top: 6px; border: 1px solid #d4d7dd; border-radius: 6px; background: #f5f6f8; color: #172033; font: inherit; cursor: pointer; text-decoration: none; }
+    a.btn.primary { background: #1a2540; color: #fff; border: 0; }
+    .row { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
+    .row input { width: 80px; padding: 5px; border: 1px solid #d4d7dd; border-radius: 6px; font: inherit; }
+    .row button { width: auto; margin: 0; }
+  </style>
+</head>
+<body>
+  <h1>⚡ TCGBot Quick Checkout</h1>
+  <div id="status" class="muted">Loading…</div>
+  <div id="list"></div>
+  <a class="btn primary" id="dashboard" href="#" target="_blank">Open the TCGBot dashboard</a>
+  <div class="row"><span class="muted">Dashboard port</span><input id="port" type="number" min="1" max="65535"><button id="save">Save</button></div>
+  <p class="muted">Open a product, then press <b>Add to Bag → Checkout</b> in the panel on the page.</p>
+  <script src="popup.js"></script>
+</body>
+</html>

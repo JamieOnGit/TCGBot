@@ -126,7 +126,7 @@ export function normalizeItem(input, knownRetailers, existing = null, { allowFas
   return item;
 }
 
-/** A product in the Quick Checkout (Tampermonkey) list. `sku` is used to recognise its page. */
+/** A product in the Quick Checkout list. `sku` is used to recognise its page. */
 export function normalizeQuickProduct(input, existing = null) {
   const src = { ...(existing || {}), ...(input || {}) };
   const url = checkUrl(str(src.url, 2000), 'Product link');

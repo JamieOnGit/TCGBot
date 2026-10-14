@@ -73,7 +73,7 @@ export const PRESETS = [
   },
 ];
 
-// Default Quick Checkout list (Tampermonkey panel), in priority order:
+// Default Quick Checkout list (extension panel / bookmark button), in priority order:
 // UPCs first, then the rest by ascending price.
 export const QUICK_DEFAULTS = [
   { sku: '43818648', name: 'Day UPC', price: 360, url: 'https://www.kmart.com.au/product/pokemon-tcg%3A-30th-celebration-ultra-premium-collection-day-43818648/' },

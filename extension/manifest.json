@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "TCGBot Quick Checkout",
+  "version": "1.0.0",
+  "description": "One click on a product page: Add to Bag → Bag → Checkout, for the products in your TCGBot dashboard. You finish checkout yourself.",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "TCGBot Quick Checkout", "default_popup": "popup.html" },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.kmart.com.au/*",
+        "https://www.ebgames.com.au/*",
+        "https://www.zingpopculture.com.au/*",
+        "https://www.jbhifi.com.au/*",
+        "https://www.target.com.au/*",
+        "https://www.bigw.com.au/*",
+        "https://www.toysrus.com.au/*",
+        "https://www.amazon.com.au/*",
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "js": ["core.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

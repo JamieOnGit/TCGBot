@@ -297,13 +297,25 @@ function upsertItem(it) {
 }
 
 // ---------------------------------------------------------------------------
-// Quick Checkout (Tampermonkey panel)
+// Quick Checkout (extension + bookmark button)
 // ---------------------------------------------------------------------------
 let quickEditingId = null;
+
+let bookmarkletRev = null;
+async function refreshBookmarklet() {
+  if (bookmarkletRev === S.quick.rev) return;
+  bookmarkletRev = S.quick.rev;
+  try {
+    const b = await api('GET', '/api/quick/bookmarklet');
+    $('#bookmarklet').setAttribute('href', b.href);
+  } catch { bookmarkletRev = null; }
+}
 
 function renderQuick() {
   const q = S.quick;
   if (!q) return;
+  $('#ext-path').textContent = q.extensionPath || '';
+  refreshBookmarklet();
   $('#quick-count').textContent = `${q.products.filter((p) => p.enabled).length} active`;
   $('#quick-list').innerHTML = q.products.map((p, i) => `
     <li class="${p.enabled ? '' : 'off'}" data-qid="${esc(p.id)}">
@@ -400,6 +412,18 @@ $('#quick-form').addEventListener('submit', async (ev) => {
   }
 });
 $('#q-cancel').addEventListener('click', resetQuickForm);
+$('#bookmarklet').addEventListener('click', (ev) => {
+  ev.preventDefault();
+  toast({ level: 'info', title: 'Drag it, don\'t click it', message: 'Drag the ⚡ TCGBot Checkout button onto your bookmarks bar, then use it on a product page.' }, 6000);
+});
+$('#copy-ext-path').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(S.quick.extensionPath);
+    toast({ level: 'success', title: 'Folder path copied' }, 2500);
+  } catch {
+    toast({ level: 'info', title: 'Select the path and copy it', message: S.quick.extensionPath });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Tabs

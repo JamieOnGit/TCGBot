@@ -37,17 +37,31 @@
   </nav>
 
   <main>
-    <!-- QUICK CHECKOUT (Tampermonkey) -->
+    <!-- QUICK CHECKOUT (extension + bookmark button) -->
     <section id="tab-quick" class="tab active">
       <div class="card">
         <h2>Quick Checkout</h2>
-        <p class="muted">A panel that runs in <b>your own browser</b> through Tampermonkey. On a product page, one click does <b>Add to Bag → Bag → Checkout</b>, then you finish the purchase yourself. It only acts when you press its button, and it reads this list (and reports back here) while TCGBot is running.</p>
-        <ol class="steps">
-          <li>Have the Tampermonkey extension installed in your browser.</li>
-          <li><a id="quick-install" class="btn primary" href="/userscript/tcgbot-quick-checkout.user.js">Install / update the userscript</a>
-            <div class="hint">Tampermonkey opens an install page: click <b>Install</b> (or <b>Update</b>). The first time the panel loads, Tampermonkey asks whether it may connect to <code>127.0.0.1</code> — choose <b>Always allow</b> so your list stays in sync.</div></li>
-          <li>Open a product below, wait for the page to load, and press <b>Add to Bag → Checkout</b> in the panel (bottom right).</li>
-        </ol>
+        <p class="muted">TCGBot's own button for <b>your normal browser</b>. On a product page, one press does <b>Add to Bag → Bag → Checkout</b>, then you finish the purchase yourself. It only acts when you press it and never reloads pages by itself.</p>
+        <div class="quick-options">
+          <div class="quick-option">
+            <h3>Option 1 · TCGBot browser extension <span class="muted">(Chrome, Edge, Brave, Arc, Opera)</span></h3>
+            <ol class="steps">
+              <li>Go to <code>chrome://extensions</code> in your browser's address bar (Edge: <code>edge://extensions</code>).</li>
+              <li>Turn on <b>Developer mode</b> (top right), click <b>Load unpacked</b> and choose this folder:
+                <div class="path-row"><code id="ext-path"></code> <button class="btn sm" type="button" id="copy-ext-path">Copy</button></div></li>
+              <li>Open a product below. The panel appears bottom-right on the page; press <b>Add to Bag → Checkout</b>. It uses this list and reports back here while TCGBot is running.</li>
+            </ol>
+          </div>
+          <div class="quick-option">
+            <h3>Option 2 · Bookmark button <span class="muted">(Safari, Firefox, any browser)</span></h3>
+            <ol class="steps">
+              <li>Show your bookmarks bar (Safari: <b>View → Show Favourites Bar</b>).</li>
+              <li>Drag this button onto the bar: <a id="bookmarklet" class="btn primary" href="#" draggable="true">⚡ TCGBot Checkout</a></li>
+              <li>On a product page, click the bookmark: it adds to bag and goes to checkout. If the store shows the bag page instead, click it once more there.</li>
+            </ol>
+            <p class="hint">The bookmark carries your list as it is right now — drag it onto the bar again after you change the list.</p>
+          </div>
+        </div>
       </div>
 
       <div class="card">
@@ -68,7 +82,7 @@
             <button class="btn ghost hidden" type="button" id="q-cancel">Cancel</button>
             <span class="error" id="q-error"></span>
           </div>
-          <p class="hint">After changing the list, open pages pick it up automatically while TCGBot is running. Re-install the userscript occasionally so its offline copy is current too.</p>
+          <p class="hint">The extension picks up changes the next time a store page loads. The bookmark button needs to be dragged to the bar again.</p>
         </form>
       </div>
 

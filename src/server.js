@@ -12,7 +12,7 @@ import { listRetailers, detectRetailer, retailerForItem } from './retailers/inde
 import { rankHits, searchQueryFor } from './match.js';
 import { STATUS_LABEL } from './status.js';
 import { PRESETS } from './presets.js';
-import { buildUserscript, USERSCRIPT_PATH } from './userscript.js';
+import { bookmarkletHref, EXTENSION_DIR } from './bookmarklet.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
@@ -75,7 +75,7 @@ export function fullState(app) {
 export function quickView(app) {
   return {
     rev: app.store.quick.rev,
-    userscriptUrl: USERSCRIPT_PATH,
+    extensionPath: EXTENSION_DIR,
     products: app.store.quick.products.map((p) => {
       const d = detectRetailer(p.url);
       return { ...p, store: d ? d.name : '' };
@@ -173,9 +173,9 @@ export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
     return { ok: true };
   });
 
-  // --- Quick Checkout (Tampermonkey) -----------------------------------------
+  // --- Quick Checkout (browser extension + bookmark button) -------------------
   route('GET', '/api/quick', () => quickView(app));
-  // Read by the userscript to stay in sync with the dashboard.
+  // Read by the TCGBot browser extension to stay in sync with the dashboard.
   route('GET', '/api/quick/products', () => ({ rev: app.store.quick.rev, products: app.store.quick.products }));
   const withSku = (body) => {
     if (body.url && !body.sku) {
@@ -184,6 +184,10 @@ export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
     }
     return body;
   };
+  route('GET', '/api/quick/bookmarklet', () => {
+    const href = bookmarkletHref(app.store.quick.products);
+    return { href, rev: app.store.quick.rev, bytes: href.length };
+  });
   route('POST', '/api/quick/products', async (req) => app.store.addQuickProduct(withSku(await readJson(req))));
   route('PUT', '/api/quick/products/:id', async (req, { id }) => {
     if (!app.store.getQuickProduct(id)) throw new HttpError(404, 'Product not found');
@@ -325,10 +329,6 @@ export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
       }
 
       if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
-      if (url.pathname === USERSCRIPT_PATH) {
-        const script = buildUserscript({ dashboardUrl: `http://127.0.0.1:${server.address().port}`, products: app.store.quick.products, rev: app.store.quick.rev });
-        return send(res, 200, script, { 'content-type': 'text/javascript; charset=utf-8' });
-      }
       if (url.pathname.startsWith('/screenshots/')) {
         const name = path.basename(url.pathname);
         const file = path.join(app.dataDir, 'screenshots', name);

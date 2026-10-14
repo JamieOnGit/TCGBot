@@ -30,7 +30,8 @@ test('opens on Quick Checkout with the default product list', async () => {
   await page.waitForSelector('#tab-quick.active #quick-list li[data-qid]');
   assert.equal(await page.locator('#quick-list li[data-qid]').count(), 7);
   assert.match(await page.textContent('#quick-list li:first-child'), /Day UPC — \$360\.00/);
-  assert.equal(await page.getAttribute('#quick-install', 'href'), '/userscript/tcgbot-quick-checkout.user.js');
+  assert.match(await page.textContent('#ext-path'), /extension$/);
+  await page.waitForFunction(() => document.querySelector('#bookmarklet').getAttribute('href').startsWith('javascript:'));
   // Add a product: SKU is detected from the link.
   await page.fill('#q-url', env.store.productUrl('311002'));
   await page.fill('#q-name', 'OP-18 Box');
