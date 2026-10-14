@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TCGBot</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2322c55e'/%3E%3Cpath d='M18 4 8 18h7l-2 10 11-15h-7z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">⚡</span>
+      <div>
+        <div class="brand-name">TCGBot</div>
+        <div class="brand-sub">Restock monitor &amp; checkout assist</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="engine-pill" class="pill">Stopped</span>
+      <span id="vault-pill" class="pill subtle" title="Saved card status"></span>
+      <button id="btn-browser" class="btn ghost" title="Open the bot's browser window (log in to retailers here)">Open browser</button>
+      <button id="btn-start" class="btn start big">▶ Start monitoring</button>
+    </div>
+  </header>
+
+  <div id="setup-banner" class="setup-banner hidden"></div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="watch" class="active">Watchlist <span id="count" class="count"></span></button>
+    <button role="tab" data-tab="add" id="tab-btn-add">+ Add item</button>
+    <button role="tab" data-tab="profile">Profile &amp; payment</button>
+    <button role="tab" data-tab="settings">Settings</button>
+    <button role="tab" data-tab="activity">Activity</button>
+    <button role="tab" data-tab="help">Help</button>
+  </nav>
+
+  <main>
+    <!-- WATCHLIST -->
+    <section id="tab-watch" class="tab active">
+      <div id="watchlist"></div>
+    </section>
+
+    <!-- ADD / EDIT -->
+    <section id="tab-add" class="tab">
+      <form id="item-form" class="card form" autocomplete="off">
+        <h2 id="form-title">Add something to watch</h2>
+        <p class="muted">Use a product link if the product is already listed. For products that aren't listed yet (or to watch several stores at once), use keywords: the bot searches each store and picks up the listing as soon as it appears.</p>
+
+        <div class="row">
+          <label class="grow">Start from a popular release
+            <select id="f-preset"><option value="">— Choose a preset (optional) —</option></select>
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="grow"><span>Name <span class="muted">(shown in your watchlist)</span></span>
+            <input id="f-name" placeholder="e.g. OP-18 Booster Box" maxlength="200">
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Where to watch</legend>
+          <div id="f-retailers" class="chips"></div>
+          <div class="row hidden" id="f-domain-row">
+            <label class="grow">Shopify store domain
+              <input id="f-domain" placeholder="e.g. mystore.com.au">
+            </label>
+          </div>
+          <p class="hint" id="f-retailer-hint">Pick one or more stores. A separate watch is created for each.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>How to find it <span class="muted">(fill in at least one)</span></legend>
+          <div class="row">
+            <label class="grow">Product link
+              <input id="f-url" type="url" placeholder="https://www.ebgames.com.au/product/…">
+            </label>
+            <button type="button" id="btn-probe" class="btn ghost self-end">Test link</button>
+          </div>
+          <div id="probe-out" class="probe hidden"></div>
+          <div class="row">
+            <label>SKU / product code
+              <input id="f-sku" placeholder="e.g. 321456 or B0XXXXXXXX">
+            </label>
+          </div>
+          <div class="row">
+            <label class="grow"><span>Keywords <span class="muted">— comma = AND, | = OR</span></span>
+              <input id="f-keywords" placeholder="one piece, op-18|op18, booster box|display">
+            </label>
+          </div>
+          <div class="row">
+            <label class="grow">Exclude words
+              <input id="f-exclude" placeholder="sleeves, playmat, binder">
+            </label>
+            <button type="button" id="btn-search-test" class="btn ghost self-end">Preview matches</button>
+          </div>
+          <div id="search-out" class="probe hidden"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>When it's available</legend>
+          <div class="modes">
+            <label class="mode"><input type="radio" name="mode" value="notify"><span><b>Alert me</b><small>Sound, pop-up and Discord alert.</small></span></label>
+            <label class="mode"><input type="radio" name="mode" value="cart"><span><b>Add to cart</b><small>Alert + put it in your cart in the bot browser.</small></span></label>
+            <label class="mode"><input type="radio" name="mode" value="assist" checked><span><b>Checkout assist</b><small>Alert + add to cart + fill in checkout. Stops at "Place order" for you to click.</small></span></label>
+          </div>
+          <div class="row">
+            <label>Max price ($)
+              <input id="f-maxPrice" type="number" min="0" step="0.01" placeholder="no limit">
+            </label>
+            <label>Quantity
+              <input id="f-quantity" type="number" min="1" max="20" value="1">
+            </label>
+          </div>
+        </fieldset>
+
+        <details>
+          <summary>Advanced</summary>
+          <div class="row">
+            <label>Check every (seconds)
+              <input id="f-pollSeconds" type="number" min="3" max="3600" placeholder="default">
+            </label>
+            <label>Monitor method
+              <select id="f-method">
+                <option value="auto">Auto (recommended)</option>
+                <option value="http">Fast HTTP only</option>
+                <option value="browser">Browser window</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label class="grow"><span>Search query override <span class="muted">(what to type in the store's search box)</span></span>
+              <input id="f-searchQuery" placeholder="defaults to the first word of each keyword group">
+            </label>
+          </div>
+        </details>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary big" id="btn-save-item">Add to watchlist</button>
+          <button type="button" class="btn ghost hidden" id="btn-cancel-edit">Cancel</button>
+          <span id="form-error" class="error"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- PROFILE & PAYMENT -->
+    <section id="tab-profile" class="tab">
+      <form id="profile-form" class="card form" autocomplete="on">
+        <h2>Shipping details</h2>
+        <p class="muted">Used to fill in checkout forms. Fields the retailer already has (from your account) are left alone.</p>
+        <div class="row">
+          <label>First name<input name="firstName" autocomplete="given-name"></label>
+          <label>Last name<input name="lastName" autocomplete="family-name"></label>
+        </div>
+        <div class="row">
+          <label class="grow">Email<input name="email" type="email" autocomplete="email"></label>
+          <label>Mobile<input name="phone" type="tel" autocomplete="tel" placeholder="04xx xxx xxx"></label>
+        </div>
+        <div class="row"><label class="grow">Street address<input name="address1" autocomplete="address-line1"></label></div>
+        <div class="row"><label class="grow">Unit / apartment (optional)<input name="address2" autocomplete="address-line2"></label></div>
+        <div class="row">
+          <label class="grow">Suburb<input name="suburb" autocomplete="address-level2"></label>
+          <label>State
+            <select name="state" autocomplete="address-level1">
+              <option value="">—</option><option>NSW</option><option>VIC</option><option>QLD</option><option>WA</option><option>SA</option><option>TAS</option><option>ACT</option><option>NT</option>
+            </select>
+          </label>
+          <label>Postcode<input name="postcode" inputmode="numeric" maxlength="4" autocomplete="postal-code"></label>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" type="submit">Save details</button>
+          <span id="profile-msg" class="muted"></span>
+        </div>
+      </form>
+
+      <div class="card form" id="vault-card">
+        <h2>Card (optional)</h2>
+        <p class="muted">The easiest and safest option is a card saved in your retailer accounts, or PayPal. If you'd like the bot to type a card in for you, save it here: it's encrypted with your passphrase and only decrypted in memory after you unlock it.</p>
+        <div id="vault-body"></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="tab">
+      <form id="settings-form" class="card form">
+        <h2>Monitoring</h2>
+        <div class="row">
+          <label>Check each item every (s)<input name="pollSeconds" type="number" min="3" max="3600"></label>
+          <label>Min gap per site (s)<input name="minHostGapSeconds" type="number" min="1" max="600"></label>
+          <label>Random jitter (%)<input name="jitterPercent" type="number" min="0" max="90"></label>
+        </div>
+        <p class="hint">The per-site gap spaces out requests to the same store no matter how many items you watch there. Very short intervals get you rate-limited or blocked — 10–30s is a good range.</p>
+        <label class="check"><input type="checkbox" name="autoStart"> Start monitoring automatically when TCGBot opens</label>
+
+        <h2>Alerts</h2>
+        <div class="row">
+          <label class="grow">Discord webhook URL<input name="discordWebhook" placeholder="https://discord.com/api/webhooks/…"></label>
+          <label>Mention<input name="discordMention" placeholder="@everyone or <@123…>"></label>
+        </div>
+        <div class="row">
+          <button type="button" class="btn ghost" id="btn-test-alert">Send test alert</button>
+          <button type="button" class="btn ghost" id="btn-notif">Enable desktop notifications</button>
+          <label class="check"><input type="checkbox" id="sound-toggle" checked> Play sound</label>
+        </div>
+
+        <h2>Browser</h2>
+        <div class="row">
+          <label>Browser
+            <select name="browserChannel">
+              <option value="chromium">Built-in Chromium</option>
+              <option value="chrome">Google Chrome</option>
+              <option value="msedge">Microsoft Edge</option>
+            </select>
+          </label>
+          <label class="grow">Custom browser path (optional)<input name="browserPath" placeholder="leave empty"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="blockImages"> Skip loading images in the bot browser (faster pages)</label>
+        <label class="check"><input type="checkbox" name="headless"> Hide the browser window (not recommended: you can't see CAPTCHAs or click Place order)</label>
+
+        <details>
+          <summary>Advanced</summary>
+          <div class="row">
+            <label>Request timeout (s)<input name="requestTimeoutSeconds" type="number" min="3" max="120"></label>
+            <label>Max assist attempts per restock<input name="maxAssistAttempts" type="number" min="1" max="10"></label>
+          </div>
+          <div class="row"><label class="grow">HTTP User-Agent (blank = default)<input name="userAgent"></label></div>
+        </details>
+
+        <div class="form-actions">
+          <button class="btn primary" type="submit">Save settings</button>
+          <span id="settings-msg" class="muted"></span>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>Retailer logins</h2>
+        <p class="muted">Open each store in the bot's browser and sign in once (and save your address/card in your account there if you like). The bot's browser remembers it, which makes checkout much faster.</p>
+        <div id="logins" class="login-grid"></div>
+      </div>
+    </section>
+
+    <!-- ACTIVITY -->
+    <section id="tab-activity" class="tab">
+      <div class="card">
+        <div class="row between">
+          <h2>Activity</h2>
+          <label class="check"><input type="checkbox" id="log-important"> Only important</label>
+        </div>
+        <ol id="log" class="log"></ol>
+      </div>
+    </section>
+
+    <!-- HELP -->
+    <section id="tab-help" class="tab">
+      <div class="card prose">
+        <h2>Getting started</h2>
+        <ol>
+          <li><b>Profile &amp; payment</b>: enter your shipping details (and optionally a card).</li>
+          <li><b>Settings → Retailer logins</b>: open each store in the bot browser and sign in once.</li>
+          <li><b>+ Add item</b>: pick a preset or enter a link / SKU / keywords and choose the stores.</li>
+          <li>Press <b>▶ Start monitoring</b>. Leave this tab open for sound and desktop alerts.</li>
+        </ol>
+        <h2>What happens when something drops</h2>
+        <p>The status changes to <span class="chip in_stock">In stock</span> or <span class="chip preorder">Pre-order open</span> and you get an alert. With <b>Checkout assist</b> the bot browser jumps to the product, adds it to the cart, goes through checkout filling in your details and stops on the final <b>Place order / Pay now</b> button (highlighted in green). You review and click it.</p>
+        <p>The <b>⚡ Go</b> button on any item does the same thing immediately, e.g. when you know a drop is live.</p>
+        <h2>Things the bot leaves to you</h2>
+        <ul>
+          <li>CAPTCHAs, "are you human" checks and queues: it pauses, alerts you, and continues after you complete them.</li>
+          <li>Logging in, bank verification (3-D Secure), and the final purchase click.</li>
+          <li>Retailer purchase limits are respected: one account, the quantity you set.</li>
+        </ul>
+        <h2>Keywords</h2>
+        <p><code>one piece, op-18|op18, booster box|display</code> means: must contain "one piece" AND ("op-18" OR "op18") AND ("booster box" OR "display"). Accents, case and dashes don't matter ("op-18" = "OP18"), but "op-1" won't match "op-18". Use <b>Exclude</b> for accessories (sleeves, playmats…). Use <b>Preview matches</b> to check what a store returns.</p>
+        <h2>Statuses</h2>
+        <ul>
+          <li><span class="chip not_listed">Not listed yet</span> keyword/SKU watch: no matching product on that store yet. It keeps searching.</li>
+          <li><span class="chip coming_soon">Coming soon</span> listed but not orderable.</li>
+          <li><span class="chip blocked">Blocked by site</span> the store refused the request. "Auto" switches to the browser window; otherwise increase the interval.</li>
+        </ul>
+        <p>Click an item's status to see exactly which signals the bot read from the page.</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toasts" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

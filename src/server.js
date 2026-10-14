@@ -1,0 +1,309 @@
+// Local dashboard server: static UI + JSON API + live updates (Server-Sent Events).
+// Listens on 127.0.0.1 only. State-changing requests must carry the
+// X-TCGBot header (which other websites can't send cross-origin) and the
+// Host header must be localhost — so no other site can drive your bot.
+
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ValidationError } from './schema.js';
+import { listRetailers, detectRetailer, retailerForItem } from './retailers/index.js';
+import { rankHits, searchQueryFor } from './match.js';
+import { STATUS_LABEL } from './status.js';
+import { PRESETS } from './presets.js';
+
+const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function send(res, status, body, headers = {}) {
+  const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
+  res.writeHead(status, {
+    'content-type': typeof body === 'string' || Buffer.isBuffer(body) ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    ...headers,
+  });
+  res.end(data);
+}
+
+async function readJson(req) {
+  const chunks = [];
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > 1_000_000) throw new HttpError(413, 'Request too large');
+    chunks.push(c);
+  }
+  if (!chunks.length) return {};
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    throw new HttpError(400, 'Invalid JSON');
+  }
+}
+
+export function itemView(app, item) {
+  const r = retailerForItem(item);
+  return { ...item, retailerName: r ? r.name : item.retailer, rt: app.engine.snapshot(item.id) };
+}
+
+export function fullState(app) {
+  return {
+    engine: app.engine.status(),
+    settings: app.store.settings,
+    profile: app.store.profile,
+    vault: app.vault.summary(),
+    browser: { open: app.browser.isOpen() },
+    retailers: listRetailers().map((r) => r.toJSON()),
+    presets: PRESETS,
+    statusLabels: STATUS_LABEL,
+    items: app.store.items.map((i) => itemView(app, i)),
+    log: app.bus.recent(200),
+  };
+}
+
+/**
+ * @param {{app: object, port?: number, host?: string}} opts
+ * app = {store, engine, bus, notifier, vault, browser, fetcher, dataDir}
+ */
+export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
+  const clients = new Set();
+  const broadcast = (event, data) => {
+    const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of clients) res.write(msg);
+  };
+  const onLog = (e) => broadcast('log', e);
+  const onAlert = (a) => broadcast('alert', a);
+  const onItem = (snap) => {
+    const item = app.store.getItem(snap.id);
+    if (item) broadcast('item', itemView(app, item));
+  };
+  const onEngine = (s) => broadcast('engine', s);
+  const onStore = (what, info) => { if (!info?.quiet) broadcast('refresh', { what }); };
+  app.bus.on('log', onLog);
+  app.bus.on('alert', onAlert);
+  app.engine.on('item', onItem);
+  app.engine.on('engine', onEngine);
+  app.store.on('change', onStore);
+
+  const allowedHosts = () => new Set([`127.0.0.1:${server.address()?.port}`, `localhost:${server.address()?.port}`, `[::1]:${server.address()?.port}`]);
+
+  const routes = [];
+  const route = (method, pattern, handler) => {
+    const keys = [];
+    const re = new RegExp(`^${pattern.replace(/:([a-zA-Z]+)/g, (_, k) => { keys.push(k); return '([^/]+)'; })}$`);
+    routes.push({ method, re, keys, handler });
+  };
+
+  const requireItem = (id) => {
+    const item = app.store.getItem(id);
+    if (!item) throw new HttpError(404, 'Item not found');
+    return item;
+  };
+
+  // --- API -----------------------------------------------------------------
+  route('GET', '/api/state', () => fullState(app));
+  route('GET', '/api/detect', (req, params, url) => detectRetailer(url.searchParams.get('url') || '') || { retailer: null });
+
+  route('POST', '/api/items', async (req) => {
+    const body = await readJson(req);
+    const retailers = Array.isArray(body.retailers) && body.retailers.length ? body.retailers : [body.retailer];
+    const group = retailers.length > 1 ? (body.group || `g${Date.now().toString(36)}`) : (body.group || '');
+    const created = [];
+    for (const r of retailers) {
+      created.push(app.store.addItem({ ...body, retailer: r, group, retailers: undefined }));
+    }
+    return { items: created.map((i) => itemView(app, i)) };
+  });
+  route('PUT', '/api/items/:id', async (req, { id }) => {
+    requireItem(id);
+    const body = await readJson(req);
+    return itemView(app, app.store.updateItem(id, body));
+  });
+  route('DELETE', '/api/items/:id', (req, { id }) => {
+    app.store.removeItem(id);
+    return { ok: true };
+  });
+  route('POST', '/api/items/:id/check', async (req, { id }) => {
+    const item = requireItem(id);
+    const snap = await app.engine.checkItem(item);
+    return { item: itemView(app, item), result: snap.result };
+  });
+  route('POST', '/api/items/:id/go', (req, { id }) => {
+    requireItem(id);
+    // Runs in the background; progress arrives over /api/events.
+    app.engine.goNow(id).catch((e) => app.bus.log('error', `Go failed: ${e.message}`, { itemId: id }));
+    return { ok: true };
+  });
+  route('POST', '/api/items/:id/reset', async (req, { id }) => {
+    requireItem(id);
+    const body = await readJson(req);
+    app.engine.reset(id, { forgetListing: !!body.forgetListing });
+    return itemView(app, app.store.getItem(id));
+  });
+  route('POST', '/api/items/:id/open', async (req, { id }) => {
+    const item = requireItem(id);
+    const snap = app.engine.snapshot(id);
+    const target = snap.url || item.url || item.resolvedUrl;
+    if (!target) throw new HttpError(400, 'No product page found yet for this item');
+    await app.browser.open(target);
+    return { ok: true };
+  });
+
+  route('POST', '/api/start', () => app.engine.start());
+  route('POST', '/api/stop', () => app.engine.stop());
+
+  route('PUT', '/api/settings', async (req) => app.store.setSettings(await readJson(req)));
+  route('PUT', '/api/profile', async (req) => app.store.setProfile(await readJson(req)));
+
+  route('POST', '/api/vault', async (req) => {
+    const body = await readJson(req);
+    try {
+      return await app.vault.save(body.passphrase, body.card || {});
+    } catch (e) {
+      throw new HttpError(400, e.message);
+    }
+  });
+  route('POST', '/api/vault/unlock', async (req) => {
+    const body = await readJson(req);
+    try {
+      return await app.vault.unlock(body.passphrase || '');
+    } catch (e) {
+      throw new HttpError(400, e.message);
+    }
+  });
+  route('POST', '/api/vault/lock', () => app.vault.lock());
+  route('DELETE', '/api/vault', () => app.vault.remove());
+
+  route('POST', '/api/browser/open', async (req) => {
+    const body = await readJson(req);
+    let target = body.url;
+    if (!target && body.retailer) {
+      const r = listRetailers().find((x) => x.id === body.retailer);
+      if (!r) throw new HttpError(404, 'Unknown retailer');
+      target = r.loginUrl();
+    }
+    if (target && !/^https?:\/\//i.test(target)) throw new HttpError(400, 'Invalid URL');
+    if (target) await app.browser.open(target);
+    else await app.browser.context();
+    return { ok: true };
+  });
+  route('POST', '/api/browser/close', async () => {
+    await app.browser.close();
+    return { ok: true };
+  });
+
+  route('POST', '/api/test-alert', async () => {
+    app.notifier.alert({ level: 'urgent', title: 'Test alert from TCGBot', message: 'If you can see/hear this, alerts are working.' });
+    const discord = app.store.settings.discordWebhook ? await app.notifier.sendDiscord({ level: 'info', title: 'TCGBot Discord test', message: 'Discord alerts are working.', ts: Date.now() }) : { ok: false, reason: 'no webhook set' };
+    return { ok: true, discord };
+  });
+
+  // Diagnostics: what does the bot see on this page / in this search?
+  route('POST', '/api/probe', async (req) => {
+    const body = await readJson(req);
+    const det = body.retailer ? { retailer: body.retailer, domain: body.domain } : detectRetailer(body.url || '');
+    if (!det || !det.retailer) throw new HttpError(400, 'Paste a product link');
+    const item = { id: 'probe', name: 'probe', retailer: det.retailer, domain: det.domain || body.domain || '', url: body.url, sku: body.sku || '', method: body.method || 'auto' };
+    const retailer = retailerForItem(item);
+    if (!retailer) throw new HttpError(400, 'Unknown retailer for that link');
+    const t0 = Date.now();
+    const result = await retailer.check(body.url, app.engine.fetchCtx(item, retailer), item);
+    return { retailer: retailer.name, ms: Date.now() - t0, statusLabel: STATUS_LABEL[result.status], ...result };
+  });
+  route('POST', '/api/search-test', async (req) => {
+    const body = await readJson(req);
+    const item = { id: 'probe', retailer: body.retailer, domain: body.domain || '', method: body.method || 'auto' };
+    const retailer = retailerForItem(item);
+    if (!retailer) throw new HttpError(400, 'Unknown retailer');
+    const q = body.searchQuery || searchQueryFor(body.keywords || '');
+    if (!q) throw new HttpError(400, 'Enter keywords first');
+    const t0 = Date.now();
+    const hits = await retailer.search(q, app.engine.fetchCtx(item, retailer));
+    const ranked = rankHits(hits, body.keywords || q, body.exclude || '');
+    return { retailer: retailer.name, query: q, ms: Date.now() - t0, total: hits.length, matches: ranked.slice(0, 10), sample: hits.slice(0, 10) };
+  });
+
+  // --- HTTP plumbing ---------------------------------------------------------
+  const server = http.createServer(async (req, res) => {
+    let url;
+    try {
+      url = new URL(req.url, 'http://localhost');
+      if (!allowedHosts().has(String(req.headers.host || '').toLowerCase())) throw new HttpError(403, 'Forbidden host');
+
+      if (url.pathname === '/api/events') {
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
+        res.write(`event: hello\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+        clients.add(res);
+        const hb = setInterval(() => res.write(': ping\n\n'), 20000);
+        req.on('close', () => { clearInterval(hb); clients.delete(res); });
+        return;
+      }
+
+      if (url.pathname.startsWith('/api/')) {
+        if (req.method !== 'GET' && req.headers['x-tcgbot'] !== '1') throw new HttpError(403, 'Missing X-TCGBot header');
+        for (const r of routes) {
+          if (r.method !== req.method) continue;
+          const m = url.pathname.match(r.re);
+          if (!m) continue;
+          const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
+          const out = await r.handler(req, params, url);
+          return send(res, 200, out);
+        }
+        throw new HttpError(404, 'Not found');
+      }
+
+      if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
+      if (url.pathname.startsWith('/screenshots/')) {
+        const name = path.basename(url.pathname);
+        const file = path.join(app.dataDir, 'screenshots', name);
+        if (!/^[\w.-]+\.png$/.test(name) || !fs.existsSync(file)) throw new HttpError(404, 'Not found');
+        return send(res, 200, fs.readFileSync(file), { 'content-type': 'image/png' });
+      }
+      const rel = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
+      const file = path.join(PUBLIC_DIR, path.normalize(rel));
+      if (!file.startsWith(PUBLIC_DIR) || !fs.existsSync(file) || !fs.statSync(file).isFile()) throw new HttpError(404, 'Not found');
+      return send(res, 200, fs.readFileSync(file), {
+        'content-type': MIME[path.extname(file)] || 'application/octet-stream',
+        'content-security-policy': "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; connect-src 'self'",
+      });
+    } catch (e) {
+      const status = e instanceof HttpError ? e.status : e instanceof ValidationError ? 400 : 500;
+      if (status === 500) app.bus.log('error', `API error on ${req.method} ${url?.pathname}: ${e.message}`);
+      if (!res.headersSent) send(res, status, { error: e.message });
+      else res.end();
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      server.off('error', reject);
+      const actual = server.address().port;
+      resolve({
+        server,
+        url: `http://127.0.0.1:${actual}`,
+        port: actual,
+        close: () => new Promise((r) => {
+          app.bus.off('log', onLog);
+          app.bus.off('alert', onAlert);
+          app.engine.off('item', onItem);
+          app.engine.off('engine', onEngine);
+          app.store.off('change', onStore);
+          for (const c of clients) c.end();
+          clients.clear();
+          server.close(() => r());
+          server.closeAllConnections?.();
+        }),
+      });
+    });
+  });
+}

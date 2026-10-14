@@ -1,0 +1,24 @@
+{
+  "name": "tcgbot",
+  "version": "1.0.0",
+  "description": "Restock monitor and checkout assistant for Pokémon / One Piece TCG releases at Australian retailers.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "tcgbot": "src/index.js"
+  },
+  "scripts": {
+    "setup": "npm install && npx playwright install chromium",
+    "start": "node src/index.js",
+    "demo": "node devtools/demo.js",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.56.1"
+  },
+  "license": "MIT",
+  "private": true
+}
