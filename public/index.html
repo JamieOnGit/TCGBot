@@ -27,7 +27,8 @@
   <div id="setup-banner" class="setup-banner hidden"></div>
 
   <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="watch" class="active">Watchlist <span id="count" class="count"></span></button>
+    <button role="tab" data-tab="quick" class="active">⚡ Quick Checkout</button>
+    <button role="tab" data-tab="watch">Watchlist <span id="count" class="count"></span></button>
     <button role="tab" data-tab="add" id="tab-btn-add">+ Add item</button>
     <button role="tab" data-tab="profile">Profile &amp; payment</button>
     <button role="tab" data-tab="settings">Settings</button>
@@ -36,8 +37,49 @@
   </nav>
 
   <main>
+    <!-- QUICK CHECKOUT (Tampermonkey) -->
+    <section id="tab-quick" class="tab active">
+      <div class="card">
+        <h2>Quick Checkout</h2>
+        <p class="muted">A panel that runs in <b>your own browser</b> through Tampermonkey. On a product page, one click does <b>Add to Bag → Bag → Checkout</b>, then you finish the purchase yourself. It only acts when you press its button, and it reads this list (and reports back here) while TCGBot is running.</p>
+        <ol class="steps">
+          <li>Have the Tampermonkey extension installed in your browser.</li>
+          <li><a id="quick-install" class="btn primary" href="/userscript/tcgbot-quick-checkout.user.js">Install / update the userscript</a>
+            <div class="hint">Tampermonkey opens an install page: click <b>Install</b> (or <b>Update</b>). The first time the panel loads, Tampermonkey asks whether it may connect to <code>127.0.0.1</code> — choose <b>Always allow</b> so your list stays in sync.</div></li>
+          <li>Open a product below, wait for the page to load, and press <b>Add to Bag → Checkout</b> in the panel (bottom right).</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="row between"><h2>Products · priority order</h2><span class="muted" id="quick-count"></span></div>
+        <ol id="quick-list" class="quick-list"></ol>
+        <form id="quick-form" class="form" autocomplete="off">
+          <h2 id="quick-form-title">Add a product</h2>
+          <div class="row">
+            <label class="grow">Product link<input id="q-url" type="url" placeholder="https://www.kmart.com.au/product/…" required></label>
+          </div>
+          <div class="row">
+            <label class="grow">Name<input id="q-name" placeholder="e.g. Day UPC" maxlength="120"></label>
+            <label>Product code (SKU)<input id="q-sku" placeholder="auto from link"></label>
+            <label>Price ($)<input id="q-price" type="number" min="0" step="0.01" placeholder="optional"></label>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary" type="submit" id="q-save">Add product</button>
+            <button class="btn ghost hidden" type="button" id="q-cancel">Cancel</button>
+            <span class="error" id="q-error"></span>
+          </div>
+          <p class="hint">After changing the list, open pages pick it up automatically while TCGBot is running. Re-install the userscript occasionally so its offline copy is current too.</p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Recent Quick Checkout activity</h2>
+        <ol id="quick-log" class="log"></ol>
+      </div>
+    </section>
+
     <!-- WATCHLIST -->
-    <section id="tab-watch" class="tab active">
+    <section id="tab-watch" class="tab">
       <div id="watchlist"></div>
     </section>
 

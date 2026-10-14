@@ -12,6 +12,7 @@ import { listRetailers, detectRetailer, retailerForItem } from './retailers/inde
 import { rankHits, searchQueryFor } from './match.js';
 import { STATUS_LABEL } from './status.js';
 import { PRESETS } from './presets.js';
+import { buildUserscript, USERSCRIPT_PATH } from './userscript.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
@@ -66,9 +67,23 @@ export function fullState(app) {
     presets: PRESETS,
     statusLabels: STATUS_LABEL,
     items: app.store.items.map((i) => itemView(app, i)),
+    quick: quickView(app),
     log: app.bus.recent(200),
   };
 }
+
+export function quickView(app) {
+  return {
+    rev: app.store.quick.rev,
+    userscriptUrl: USERSCRIPT_PATH,
+    products: app.store.quick.products.map((p) => {
+      const d = detectRetailer(p.url);
+      return { ...p, store: d ? d.name : '' };
+    }),
+  };
+}
+
+const QUICK_EVENT_TYPES = new Set(['add', 'basket', 'checkout', 'error']);
 
 /**
  * @param {{app: object, port?: number, host?: string}} opts
@@ -155,6 +170,54 @@ export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
     const target = snap.url || item.url || item.resolvedUrl;
     if (!target) throw new HttpError(400, 'No product page found yet for this item');
     await app.browser.open(target);
+    return { ok: true };
+  });
+
+  // --- Quick Checkout (Tampermonkey) -----------------------------------------
+  route('GET', '/api/quick', () => quickView(app));
+  // Read by the userscript to stay in sync with the dashboard.
+  route('GET', '/api/quick/products', () => ({ rev: app.store.quick.rev, products: app.store.quick.products }));
+  const withSku = (body) => {
+    if (body.url && !body.sku) {
+      const d = detectRetailer(body.url);
+      if (d && d.sku) return { ...body, sku: d.sku };
+    }
+    return body;
+  };
+  route('POST', '/api/quick/products', async (req) => app.store.addQuickProduct(withSku(await readJson(req))));
+  route('PUT', '/api/quick/products/:id', async (req, { id }) => {
+    if (!app.store.getQuickProduct(id)) throw new HttpError(404, 'Product not found');
+    return app.store.updateQuickProduct(id, withSku(await readJson(req)));
+  });
+  route('DELETE', '/api/quick/products/:id', (req, { id }) => {
+    app.store.removeQuickProduct(id);
+    return { ok: true };
+  });
+  route('POST', '/api/quick/reorder', async (req) => {
+    const body = await readJson(req);
+    if (!Array.isArray(body.ids)) throw new HttpError(400, 'ids must be a list');
+    app.store.reorderQuick(body.ids.map(String));
+    return quickView(app);
+  });
+  let quickEvents = [];
+  route('POST', '/api/quick/events', async (req) => {
+    const body = await readJson(req);
+    const now = Date.now();
+    quickEvents = quickEvents.filter((t) => now - t < 60000);
+    if (quickEvents.length >= 30) throw new HttpError(429, 'Too many events');
+    quickEvents.push(now);
+    const type = String(body.type || '');
+    if (!QUICK_EVENT_TYPES.has(type)) throw new HttpError(400, 'Unknown event type');
+    const name = String(body.name || body.sku || 'product').slice(0, 120);
+    const message = String(body.message || '').slice(0, 200);
+    const url = /^https?:\/\//i.test(String(body.url || '')) ? String(body.url).slice(0, 500) : undefined;
+    if (type === 'checkout') {
+      app.notifier.alert({ level: 'urgent', title: `At checkout: ${name}`, message: `Quick Checkout — ${message}. Finish the purchase in your browser.`, url });
+    } else if (type === 'error') {
+      app.notifier.alert({ level: 'warning', title: `Quick Checkout: ${name}`, message, url });
+    } else {
+      app.bus.log('info', `[Quick Checkout] ${name}: ${message}`);
+    }
     return { ok: true };
   });
 
@@ -262,6 +325,10 @@ export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
       }
 
       if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
+      if (url.pathname === USERSCRIPT_PATH) {
+        const script = buildUserscript({ dashboardUrl: `http://127.0.0.1:${server.address().port}`, products: app.store.quick.products, rev: app.store.quick.rev });
+        return send(res, 200, script, { 'content-type': 'text/javascript; charset=utf-8' });
+      }
       if (url.pathname.startsWith('/screenshots/')) {
         const name = path.basename(url.pathname);
         const file = path.join(app.dataDir, 'screenshots', name);

@@ -4,8 +4,13 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  DEFAULT_PROFILE, DEFAULT_SETTINGS, normalizeItem, normalizeProfile, normalizeSettings, ValidationError,
+  DEFAULT_PROFILE, DEFAULT_SETTINGS, normalizeItem, normalizeProfile, normalizeQuickProduct, normalizeSettings, ValidationError,
 } from './schema.js';
+import { QUICK_DEFAULTS } from './presets.js';
+
+function defaultQuick() {
+  return { rev: 1, products: QUICK_DEFAULTS.map((p) => normalizeQuickProduct(p)) };
+}
 
 export class Store extends EventEmitter {
   /**
@@ -18,7 +23,7 @@ export class Store extends EventEmitter {
     this.file = path.join(dataDir, 'state.json');
     this.knownRetailers = knownRetailers;
     this.allowFastPolling = allowFastPolling;
-    this.state = { version: 1, settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE }, items: [] };
+    this.state = { version: 1, settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE }, items: [], quick: defaultQuick() };
     this.saveTimer = null;
   }
 
@@ -49,6 +54,13 @@ export class Store extends EventEmitter {
           // Skip items that no longer validate (e.g. a removed retailer).
         }
       }
+      if (raw.quick && Array.isArray(raw.quick.products)) {
+        const products = [];
+        for (const p of raw.quick.products) {
+          try { products.push(normalizeQuickProduct(p, { id: p.id })); } catch { /* skip invalid */ }
+        }
+        this.state.quick = { rev: Number(raw.quick.rev) || 1, products };
+      }
     } else {
       this.saveNow();
     }
@@ -58,6 +70,7 @@ export class Store extends EventEmitter {
   get settings() { return this.state.settings; }
   get profile() { return this.state.profile; }
   get items() { return this.state.items; }
+  get quick() { return this.state.quick; }
 
   getItem(id) {
     return this.state.items.find((i) => i.id === id) || null;
@@ -95,6 +108,51 @@ export class Store extends EventEmitter {
     this.state.items = this.state.items.filter((i) => i.id !== id);
     if (this.state.items.length === before) throw new ValidationError('Item not found');
     this.changed('items', { removed: id });
+  }
+
+  // --- Quick Checkout list (order = priority) -------------------------------
+
+  getQuickProduct(id) {
+    return this.state.quick.products.find((p) => p.id === id) || null;
+  }
+
+  addQuickProduct(input) {
+    const p = normalizeQuickProduct(input);
+    while (this.getQuickProduct(p.id)) p.id = `${p.id}x`;
+    this.state.quick.products.push(p);
+    this.quickChanged();
+    return p;
+  }
+
+  updateQuickProduct(id, patch) {
+    const idx = this.state.quick.products.findIndex((p) => p.id === id);
+    if (idx === -1) throw new ValidationError('Product not found');
+    const p = normalizeQuickProduct(patch, this.state.quick.products[idx]);
+    this.state.quick.products[idx] = p;
+    this.quickChanged();
+    return p;
+  }
+
+  removeQuickProduct(id) {
+    const before = this.state.quick.products.length;
+    this.state.quick.products = this.state.quick.products.filter((p) => p.id !== id);
+    if (this.state.quick.products.length === before) throw new ValidationError('Product not found');
+    this.quickChanged();
+  }
+
+  /** Reorder by a list of ids (ids not mentioned keep their relative order at the end). */
+  reorderQuick(ids) {
+    const byId = new Map(this.state.quick.products.map((p) => [p.id, p]));
+    const ordered = [];
+    for (const id of ids || []) if (byId.has(id)) { ordered.push(byId.get(id)); byId.delete(id); }
+    this.state.quick.products = [...ordered, ...byId.values()];
+    this.quickChanged();
+    return this.state.quick.products;
+  }
+
+  quickChanged() {
+    this.state.quick.rev += 1;
+    this.changed('quick');
   }
 
   setSettings(patch) {

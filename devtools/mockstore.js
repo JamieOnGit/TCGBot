@@ -191,7 +191,7 @@ for (const el of document.querySelectorAll('input')) {
             const qty = Number(document.querySelector('input[name=quantity]').value || 1);
             const r = await fetch('/api/cart/add', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({sku:'${prod.sku}', qty})});
             const d = await r.json();
-            if (d.ok) { setTimeout(() => { document.getElementById('drawer-msg').textContent = d.count + ' item(s) in cart'; document.getElementById('drawer').classList.add('open'); }, 150); }
+            if (d.ok && ${prod.drawer !== false}) { setTimeout(() => { document.getElementById('drawer-msg').textContent = d.count + ' item(s) in cart'; document.getElementById('drawer').classList.add('open'); }, 150); }
           });
         </script>`, { head: ld }));
     }

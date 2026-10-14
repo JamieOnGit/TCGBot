@@ -35,6 +35,7 @@ async function refreshState() {
   renderWatchlist();
   renderVault();
   renderSetupBanner();
+  renderQuick();
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +295,111 @@ function upsertItem(it) {
   if (idx === -1) S.items.push(it); else S.items[idx] = it;
   queueRender();
 }
+
+// ---------------------------------------------------------------------------
+// Quick Checkout (Tampermonkey panel)
+// ---------------------------------------------------------------------------
+let quickEditingId = null;
+
+function renderQuick() {
+  const q = S.quick;
+  if (!q) return;
+  $('#quick-count').textContent = `${q.products.filter((p) => p.enabled).length} active`;
+  $('#quick-list').innerHTML = q.products.map((p, i) => `
+    <li class="${p.enabled ? '' : 'off'}" data-qid="${esc(p.id)}">
+      <span class="rank">${i + 1}</span>
+      <div>
+        <div class="q-name">${esc(p.name)}${typeof p.price === 'number' ? ` — ${money(p.price)}` : ''}</div>
+        <div class="q-meta">${esc(p.store || '')} · SKU ${esc(p.sku)}${p.enabled ? '' : ' · hidden from the panel'}</div>
+      </div>
+      <div class="actions">
+        <a class="btn sm go" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener" title="Open in this browser (the panel appears on the page)">Open ↗</a>
+        <button class="btn sm" data-q="up" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="btn sm" data-q="down" title="Move down" ${i === q.products.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="btn sm" data-q="toggle">${p.enabled ? 'Hide' : 'Show'}</button>
+        <button class="btn sm" data-q="edit">Edit</button>
+        <button class="btn sm danger" data-q="delete" title="Delete">✕</button>
+      </div>
+    </li>`).join('') || '<li class="muted">No products yet — add one below.</li>';
+  renderQuickLog();
+}
+
+function renderQuickLog() {
+  const lines = (S.log || []).filter((e) => /Quick Checkout/.test(e.message)).slice(-30).reverse();
+  $('#quick-log').innerHTML = lines.map(logLine).join('') || '<li class="muted">Nothing yet. Events from the panel (added to bag, reached checkout) show up here.</li>';
+}
+
+function resetQuickForm() {
+  quickEditingId = null;
+  $('#quick-form').reset();
+  $('#quick-form-title').textContent = 'Add a product';
+  $('#q-save').textContent = 'Add product';
+  $('#q-cancel').classList.add('hidden');
+  $('#q-error').textContent = '';
+}
+
+$('#quick-list').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('[data-q]');
+  if (!btn) return;
+  const id = btn.closest('[data-qid]').dataset.qid;
+  const p = S.quick.products.find((x) => x.id === id);
+  if (!p) return;
+  const act = btn.dataset.q;
+  try {
+    if (act === 'edit') {
+      quickEditingId = id;
+      $('#q-url').value = p.url;
+      $('#q-name').value = p.name;
+      $('#q-sku').value = p.sku;
+      $('#q-price').value = p.price ?? '';
+      $('#quick-form-title').textContent = `Edit: ${p.name}`;
+      $('#q-save').textContent = 'Save changes';
+      $('#q-cancel').classList.remove('hidden');
+      $('#q-url').focus();
+      return;
+    }
+    if (act === 'delete') {
+      if (!confirm(`Remove "${p.name}" from Quick Checkout?`)) return;
+      await api('DELETE', `/api/quick/products/${id}`);
+    } else if (act === 'toggle') {
+      await api('PUT', `/api/quick/products/${id}`, { enabled: !p.enabled });
+    } else if (act === 'up' || act === 'down') {
+      const ids = S.quick.products.map((x) => x.id);
+      const i = ids.indexOf(id);
+      const j = act === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= ids.length) return;
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+      S.quick = await api('POST', '/api/quick/reorder', { ids });
+      renderQuick();
+      return;
+    }
+    S.quick = await api('GET', '/api/quick');
+    renderQuick();
+  } catch (e) {
+    toast({ level: 'error', title: 'Something went wrong', message: e.message });
+  }
+});
+
+$('#quick-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const body = {
+    url: $('#q-url').value.trim(),
+    name: $('#q-name').value.trim(),
+    sku: $('#q-sku').value.trim(),
+    price: $('#q-price').value === '' ? null : Number($('#q-price').value),
+  };
+  try {
+    if (quickEditingId) await api('PUT', `/api/quick/products/${quickEditingId}`, body);
+    else await api('POST', '/api/quick/products', body);
+    resetQuickForm();
+    S.quick = await api('GET', '/api/quick');
+    renderQuick();
+    toast({ level: 'success', title: 'Saved', message: 'Open product pages pick up the change automatically.' }, 3000);
+  } catch (e) {
+    $('#q-error').textContent = e.message;
+  }
+});
+$('#q-cancel').addEventListener('click', resetQuickForm);
 
 // ---------------------------------------------------------------------------
 // Tabs
@@ -726,6 +832,7 @@ function connect() {
     S.log.push(entry);
     if (S.log.length > 500) S.log.shift();
     if ($('#tab-activity').classList.contains('active')) renderLog();
+    if (/Quick Checkout/.test(entry.message)) renderQuickLog();
   });
   es.addEventListener('alert', (e) => onAlert(JSON.parse(e.data)));
   es.addEventListener('refresh', () => refreshState());
@@ -754,5 +861,6 @@ function connect() {
   renderWatchlist();
   renderVault();
   renderSetupBanner();
+  renderQuick();
   connect();
 })();

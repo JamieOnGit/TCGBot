@@ -17,6 +17,28 @@ Everything is controlled from a local dashboard at <http://127.0.0.1:8787>.
 | Any other Shopify store | enter its domain (lots of local game stores use Shopify) |
 | Any other website | paste a product link |
 
+## ⚡ Quick Checkout (Tampermonkey panel)
+
+The dashboard opens on **Quick Checkout**: a panel for your own browser
+(through the Tampermonkey extension) that shows your product list on store
+pages. When you press **Add to Bag → Checkout** on a product page, it clicks
+Add to Bag, opens the bag and clicks Checkout. You finish the purchase yourself.
+It only acts when you press the button, and it never refreshes pages by itself.
+
+1. Start TCGBot (see Quick start below). The dashboard opens on the Quick Checkout tab.
+2. Click **Install / update the userscript**, then **Install** in Tampermonkey.
+   The first time the panel loads, Tampermonkey asks whether it may connect to
+   `127.0.0.1`. Choose **Always allow** so the panel stays in sync with your list.
+3. Click **Open ↗** next to a product, wait for the page to load, and press
+   **Add to Bag → Checkout** in the panel (bottom right).
+
+Your list comes preloaded with the Kmart Pokémon TCG 30th Celebration products
+(UPCs first, then by price). Add, edit, hide or reorder products in the dashboard,
+and open pages pick up changes while TCGBot is running. If TCGBot isn't running,
+the panel uses the copy saved when you last installed the userscript, so
+re-install it after big changes. "Added to bag" and "at checkout" events
+show up in the dashboard and on Discord, if you've set it up.
+
 ## Quick start
 
 1. Install **Node.js 20 or newer** (LTS) from <https://nodejs.org>.
@@ -100,13 +122,14 @@ your own purchases and keep the check interval reasonable (10–30s).
 npm test
 ```
 
-There are 53 tests (they need Node.js 22+). They cover:
+There are 61 tests (they need Node.js 22+). They cover:
 - HTML parsing and stock detection
 - keyword matching (including the presets)
 - form-field recognition
 - the monitor engine over real HTTP
 - the dashboard API, including the security checks
 - the dashboard UI driven by a real browser
+- the Quick Checkout userscript running in a real browser on the fake store, both through the "added to bag" popup and through the bag page
 - **end-to-end checkout** in headless Chromium against the fake store
 
 The end-to-end checkout tests cover:

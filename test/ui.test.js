@@ -26,7 +26,26 @@ after(async () => {
   await env.teardown();
 });
 
-test('empty state offers presets', async () => {
+test('opens on Quick Checkout with the default product list', async () => {
+  await page.waitForSelector('#tab-quick.active #quick-list li[data-qid]');
+  assert.equal(await page.locator('#quick-list li[data-qid]').count(), 7);
+  assert.match(await page.textContent('#quick-list li:first-child'), /Day UPC — \$360\.00/);
+  assert.equal(await page.getAttribute('#quick-install', 'href'), '/userscript/tcgbot-quick-checkout.user.js');
+  // Add a product: SKU is detected from the link.
+  await page.fill('#q-url', env.store.productUrl('311002'));
+  await page.fill('#q-name', 'OP-18 Box');
+  await page.click('#q-save');
+  await page.waitForFunction(() => document.querySelectorAll('#quick-list li[data-qid]').length === 8);
+  assert.match(await page.textContent('#quick-list li:last-child'), /OP-18 Box.*SKU 311002/s);
+  // Move it up one place.
+  await page.click('#quick-list li:last-child [data-q="up"]');
+  await page.waitForFunction(() => /OP-18 Box/.test(document.querySelector('#quick-list li:nth-child(7)').textContent));
+  assert.equal(env.app.store.quick.products[6].sku, '311002');
+  if (process.env.TCGBOT_SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.TCGBOT_SCREENSHOT_DIR, 'quick.png'), fullPage: true });
+});
+
+test('empty watchlist offers presets', async () => {
+  await page.click('[data-tab="watch"]');
   await page.waitForSelector('#watchlist .empty');
   assert.match(await page.textContent('#watchlist'), /Nothing on your watchlist yet/);
   assert.match(await page.textContent('#engine-pill'), /Stopped/);

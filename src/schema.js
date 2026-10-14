@@ -126,6 +126,24 @@ export function normalizeItem(input, knownRetailers, existing = null, { allowFas
   return item;
 }
 
+/** A product in the Quick Checkout (Tampermonkey) list. `sku` is used to recognise its page. */
+export function normalizeQuickProduct(input, existing = null) {
+  const src = { ...(existing || {}), ...(input || {}) };
+  const url = checkUrl(str(src.url, 2000), 'Product link');
+  if (!url) throw new ValidationError('Product link is required');
+  const p = {
+    id: existing?.id || str(src.id, 40) || randomUUID().slice(0, 8),
+    name: str(src.name, 120),
+    sku: str(src.sku, 60),
+    url,
+    price: num(src.price, { min: 0, max: 100000, def: null }),
+    enabled: bool(src.enabled, true),
+  };
+  if (!p.sku) throw new ValidationError('Product code (SKU) is required — it is how the panel recognises the product page');
+  if (!p.name) p.name = p.sku;
+  return p;
+}
+
 export function normalizeSettings(input, existing = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...existing, ...(input || {}) };
   return {
