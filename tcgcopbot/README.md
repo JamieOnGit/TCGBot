@@ -208,7 +208,7 @@ cd tcgcopbot
 npm test          # needs Playwright's Chromium (npx playwright install chromium)
 ```
 
-There are 57 tests:
+There are 58 tests:
 - **Accounts:** sign-up and login, sessions and logout, cross-site request
   blocking, rate limits, password reset and change, export, deletion.
 - **Isolation between customers:** lists, delivery details (including copying

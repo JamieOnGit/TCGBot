@@ -3,6 +3,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import { Client, PASSWORD, startApp } from './helpers.js';
 import { STARTER_PRODUCTS } from '../server/presets.js';
 
@@ -169,4 +170,34 @@ test('admin emails become admins; export and delete your own account', async () 
     assert.equal(db.get(`SELECT COUNT(*) AS n FROM ${table} WHERE ${col} = :id`, { id }).n, 0, `${table} emptied`);
   }
   assert.equal((await new Client(env.url).post('/api/auth/login', { email: 'koga@example.com', password: PASSWORD })).status, 401);
+});
+
+/** A request with our own Host header (fetch can't set it). */
+function raw(method, path, headers, body) {
+  const u = new URL(env.url);
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: u.hostname, port: u.port, method, path, headers }, (res) => {
+      let text = '';
+      res.on('data', (c) => { text += c; });
+      res.on('end', () => resolve({ status: res.statusCode, text }));
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
+
+test('opened at another address for this server (localhost vs 127.0.0.1): sign-up works and the page says which address to use', async () => {
+  const port = new URL(env.url).port;
+  const other = `localhost:${port}`;
+  const body = JSON.stringify({ email: 'other-host@example.com', password: PASSWORD, acceptTerms: true });
+  const ok = await raw('POST', '/api/auth/signup', { host: other, origin: `http://${other}`, 'x-tcgcopbot': '1', 'content-type': 'application/json' }, body);
+  assert.equal(ok.status, 200, ok.text);
+  const evil = await raw('POST', '/api/auth/signup', { host: other, origin: 'http://evil.example', 'x-tcgcopbot': '1', 'content-type': 'application/json' }, body);
+  assert.equal(evil.status, 403, 'other websites are still blocked');
+
+  const page = await raw('GET', '/signup?x=1', { host: other });
+  assert.match(page.text, /class="host-warning"/);
+  assert.ok(page.text.includes(`href="${env.url}/signup?x=1"`), 'links to the configured address');
+  const normal = await raw('GET', '/signup', { host: new URL(env.url).host });
+  assert.doesNotMatch(normal.text, /class="host-warning"/);
 });

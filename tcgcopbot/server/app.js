@@ -47,6 +47,15 @@ export async function createApp(options = {}) {
 
   const headers = securityHeaders(cfg);
   const allowedOrigins = () => new Set([new URL(cfg.baseUrl).origin, ...cfg.extraOrigins]);
+  // Is the request from one of our own pages? The browser's Origin must be the
+  // site it's on (same host as the request) or a configured address. Other
+  // websites can't fake either, nor send the x-tcgcopbot header without a
+  // CORS preflight we never approve.
+  const sameSite = (req) => {
+    const origin = req.headers.origin;
+    if (!origin || allowedOrigins().has(origin)) return true;
+    try { return new URL(origin).host === String(req.headers.host || '').toLowerCase(); } catch { return false; }
+  };
   const cookieName = auth.sessionCookieName(cfg);
 
   async function handleApi(req, res, url) {
@@ -60,8 +69,7 @@ export async function createApp(options = {}) {
 
     // Requests from the dashboard must come from our own pages (blocks cross-site request forgery).
     if (UNSAFE.has(req.method) && mode !== 'device' && o.csrf !== false) {
-      const origin = req.headers.origin;
-      if (req.headers['x-tcgcopbot'] !== '1' || (origin && !allowedOrigins().has(origin))) throw new HttpError(403, 'Request blocked (cross-site)');
+      if (req.headers['x-tcgcopbot'] !== '1' || !sameSite(req)) throw new HttpError(403, 'Request blocked (cross-site)');
     }
 
     if (mode === 'device') {
@@ -159,7 +167,8 @@ export async function createApp(options = {}) {
     async listen(port = cfg.port, host = cfg.host) {
       await new Promise((resolve) => server.listen(port, host, resolve));
       const addr = server.address();
-      app.url = `http://${host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host}:${addr.port}`;
+      // Listening on every interface: "localhost" is the address people type.
+      app.url = `http://${host === '0.0.0.0' || host === '::' ? 'localhost' : host}:${addr.port}`;
       if (cfg.baseUrlAuto) cfg.baseUrl = app.url;
       monitor.start();
       return app.url;

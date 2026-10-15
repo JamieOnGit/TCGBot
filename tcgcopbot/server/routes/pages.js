@@ -57,7 +57,15 @@ export function servePage(ctx, req, res, url) {
       res.end();
       return true;
     }
-    const html = render(cfg, page.file, ctx.pageCache);
+    let html = render(cfg, page.file, ctx.pageCache);
+    // Opened at a different address from BASE_URL (e.g. 127.0.0.1 vs localhost):
+    // say which one to use, because the browser extension only works with that one.
+    const known = new Set([new URL(cfg.baseUrl).host, ...cfg.extraOrigins.map((o) => { try { return new URL(o).host; } catch { return ''; } })]);
+    const host = String(req.headers.host || '').toLowerCase();
+    if (host && !known.has(host)) {
+      const target = cfg.baseUrl + url.pathname + url.search;
+      html = html.replace('<body>', `<body><div class="host-warning" role="alert">This site is set up for <a href="${esc(target)}">${esc(cfg.baseUrl)}</a> — please use that address (the browser extension only connects there).</div>`);
+    }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     res.end(req.method === 'HEAD' ? undefined : html);
     return true;

@@ -179,3 +179,5 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 .features > .card + .card, .steps > .card + .card, .stats > .card + .card { margin-top: 0; }
 .status-row input[type="search"] { width: auto; flex: 1 1 220px; }
 .topbar .wrap.full { max-width: none; }
+.host-warning { background: var(--warn-bg); color: var(--fg); padding: 10px 16px; text-align: center; font-size: 14px; border-bottom: 1px solid var(--line); }
+.host-warning a { font-weight: 700; }
