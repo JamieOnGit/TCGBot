@@ -28,8 +28,16 @@ it and never reloads pages by itself. Use either option:
 1. Go to `chrome://extensions` (Edge: `edge://extensions`).
 2. Turn on **Developer mode**, click **Load unpacked**, and choose the
    `extension` folder inside your TCGBot folder. The dashboard shows the exact path.
-3. Open a product. The panel appears bottom right; press **Add to Bag → Checkout**.
-   If the store goes to the bag page, the extension carries on to checkout by itself.
+3. In the dashboard, set the **Qty** next to a product and press **⚡ Buy**. A new
+   tab opens the product, and the extension sets the quantity, adds it to your bag
+   and goes to checkout by itself. You can also open a product and press **Add to
+   Bag → Checkout** in the panel bottom right. If the store goes to the bag page,
+   the extension carries on to checkout by itself.
+
+Each **⚡ Buy** press creates a one-time code (valid for 2 minutes) that the
+extension checks with your dashboard before starting, so no other website can
+trigger an add-to-bag. Quantity is set with the page's quantity box or its +/−
+buttons. If a page has neither, it adds 1 and tells you to change it in your bag.
 
 The extension uses your dashboard's product list and reports "added to bag" and
 "at checkout" back to it, and to Discord if you've set it up. If TCGBot isn't
@@ -39,8 +47,9 @@ running, it uses the last list it saw. If you start TCGBot on a port other than
 **Option 2 — Bookmark button** (Safari, Firefox, any browser)
 1. Show your bookmarks bar (Safari: View → Show Favourites Bar).
 2. Drag **⚡ TCGBot Checkout** from the dashboard onto the bar.
-3. On a product page, click the bookmark. If the store shows the bag page
-   instead of a checkout popup, click it once more there.
+3. On a product page (use **Open ↗** or **⚡ Buy** in the dashboard), click the
+   bookmark. It sets your quantity, adds to bag and goes to checkout. If the store
+   shows the bag page instead of a checkout popup, click it once more there.
 
 The bookmark contains your list as it was when you dragged it, so drag it again
 after you change the list.
@@ -132,14 +141,14 @@ your own purchases and keep the check interval reasonable (10–30s).
 npm test
 ```
 
-There are 62 tests (they need Node.js 22+). They cover:
+There are 67 tests (they need Node.js 22+). They cover:
 - HTML parsing and stock detection
 - keyword matching (including the presets)
 - form-field recognition
 - the monitor engine over real HTTP
 - the dashboard API, including the security checks
 - the dashboard UI driven by a real browser
-- Quick Checkout: the real extension loaded into Chromium, and the bookmark button, both run on the fake store, through the "added to bag" popup and through the bag page
+- Quick Checkout: the real extension loaded into Chromium, and the bookmark button, both run on the fake store. Covers ⚡ Buy from the dashboard with a quantity (quantity box and +/− buttons), slow-loading pages, the "added to bag" popup, the bag page, and refusing made-up codes
 - **end-to-end checkout** in headless Chromium against the fake store
 
 The end-to-end checkout tests cover:

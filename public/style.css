@@ -193,3 +193,6 @@ summary { cursor: pointer; font-weight: 600; color: var(--muted); }
 .quick-option h3 { margin: 4px 0 6px; font-size: 1rem; }
 .path-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
 .path-row code { word-break: break-all; }
+.quick-list .qty { display: inline-flex; align-items: center; gap: 4px; font-size: .85rem; color: var(--muted); }
+.quick-list .qty input { width: 56px; padding: 4px 6px; }
+.btn.buy { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }

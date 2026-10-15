@@ -49,7 +49,7 @@
               <li>Go to <code>chrome://extensions</code> in your browser's address bar (Edge: <code>edge://extensions</code>).</li>
               <li>Turn on <b>Developer mode</b> (top right), click <b>Load unpacked</b> and choose this folder:
                 <div class="path-row"><code id="ext-path"></code> <button class="btn sm" type="button" id="copy-ext-path">Copy</button></div></li>
-              <li>Open a product below. The panel appears bottom-right on the page; press <b>Add to Bag → Checkout</b>. It uses this list and reports back here while TCGBot is running.</li>
+              <li>Set the <b>Qty</b> and press <b>⚡ Buy</b> next to a product below: it opens the product in a new tab and runs Add to Bag → Checkout automatically. (Or open a product and press <b>Add to Bag → Checkout</b> in the panel bottom-right.)</li>
             </ol>
           </div>
           <div class="quick-option">
@@ -57,7 +57,7 @@
             <ol class="steps">
               <li>Show your bookmarks bar (Safari: <b>View → Show Favourites Bar</b>).</li>
               <li>Drag this button onto the bar: <a id="bookmarklet" class="btn primary" href="#" draggable="true">⚡ TCGBot Checkout</a></li>
-              <li>On a product page, click the bookmark: it adds to bag and goes to checkout. If the store shows the bag page instead, click it once more there.</li>
+              <li>On a product page (<b>Open ↗</b> or <b>⚡ Buy</b> below), click the bookmark: it sets your quantity, adds to bag and goes to checkout. If the store shows the bag page instead, click it once more there.</li>
             </ol>
             <p class="hint">The bookmark carries your list as it is right now — drag it onto the bar again after you change the list.</p>
           </div>
@@ -76,6 +76,7 @@
             <label class="grow">Name<input id="q-name" placeholder="e.g. Day UPC" maxlength="120"></label>
             <label>Product code (SKU)<input id="q-sku" placeholder="auto from link"></label>
             <label>Price ($)<input id="q-price" type="number" min="0" step="0.01" placeholder="optional"></label>
+            <label>Quantity<input id="q-qty" type="number" min="1" max="10" value="1"></label>
           </div>
           <div class="form-actions">
             <button class="btn primary" type="submit" id="q-save">Add product</button>

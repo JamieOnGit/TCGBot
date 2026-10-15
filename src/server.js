@@ -3,6 +3,7 @@
 // X-TCGBot header (which other websites can't send cross-origin) and the
 // Host header must be localhost — so no other site can drive your bot.
 
+import crypto from 'node:crypto';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -203,6 +204,34 @@ export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
     app.store.reorderQuick(body.ids.map(String));
     return quickView(app);
   });
+  // "⚡ Buy" in the dashboard: open the product with a one-time code that the
+  // extension redeems (once, within 2 minutes) to start Add to Bag → Checkout.
+  const goCodes = new Map();
+  const GO_TTL_MS = 2 * 60 * 1000;
+  route('POST', '/api/quick/go', async (req) => {
+    const body = await readJson(req);
+    let product = app.store.getQuickProduct(String(body.id || ''));
+    if (!product) throw new HttpError(404, 'Product not found');
+    if (body.quantity !== undefined && Number(body.quantity) !== product.quantity) {
+      product = app.store.updateQuickProduct(product.id, { quantity: body.quantity });
+    }
+    const now = Date.now();
+    for (const [c, v] of goCodes) if (now - v.created > GO_TTL_MS) goCodes.delete(c);
+    const code = crypto.randomBytes(12).toString('base64url');
+    goCodes.set(code, { id: product.id, sku: product.sku, name: product.name, quantity: product.quantity, created: now });
+    const u = new URL(product.url);
+    u.hash = `tcgbot-go=${code}`;
+    app.bus.log('info', `[Quick Checkout] ${product.name}: ⚡ Buy pressed (quantity ${product.quantity})`);
+    return { url: u.href, quantity: product.quantity };
+  });
+  route('POST', '/api/quick/claim', async (req) => {
+    const body = await readJson(req);
+    const entry = goCodes.get(String(body.code || ''));
+    goCodes.delete(String(body.code || ''));
+    if (!entry || Date.now() - entry.created > GO_TTL_MS) throw new HttpError(404, 'Unknown or expired code');
+    return { ok: true, sku: entry.sku, name: entry.name, quantity: entry.quantity };
+  });
+
   let quickEvents = [];
   route('POST', '/api/quick/events', async (req) => {
     const body = await readJson(req);

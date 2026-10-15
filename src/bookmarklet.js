@@ -27,7 +27,7 @@ function safeJson(value) {
 
 export function bookmarkletCode(products) {
   const list = (products || []).filter((p) => p.enabled !== false)
-    .map((p) => ({ sku: p.sku, name: p.name, price: p.price, url: p.url }));
+    .map((p) => ({ sku: p.sku, name: p.name, price: p.price, url: p.url, quantity: p.quantity || 1 }));
   const main = `
 var products = ${safeJson(list)};
 if (window.__tcgbotQuick) { window.__tcgbotQuick.go(); return; }

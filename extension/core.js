@@ -83,6 +83,85 @@ var TCGBotQuick = (function () {
 
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
 
+  async function waitForEl(find, ms) {
+    var end = Date.now() + (ms || 0);
+    for (;;) {
+      var el = find();
+      if (el || Date.now() >= end) return el;
+      await wait(200);
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Quantity
+  // --------------------------------------------------------------------------
+  /** The product's buy box: a few levels up from the Add to Bag button. */
+  function buyBox(add) {
+    var root = add;
+    for (var i = 0; i < 5 && root.parentElement && root.parentElement !== document.body; i++) root = root.parentElement;
+    return root;
+  }
+
+  function usable(el) {
+    var panel = document.getElementById(PANEL_ID);
+    return isVisible(el) && !isDisabled(el) && !(panel && panel.contains(el)) && !el.closest(RECOMMENDATIONS) && !el.closest('header, nav');
+  }
+
+  function findQuantityBox(add) {
+    var sel = 'input[type="number"], input[name*="qty" i], input[name*="quantity" i], input[id*="quantity" i], input[aria-label*="quantity" i], '
+      + 'select[name*="qty" i], select[name*="quantity" i], select[id*="quantity" i], select[aria-label*="quantity" i]';
+    var roots = [buyBox(add), document];
+    for (var r = 0; r < roots.length; r++) {
+      var found = Array.prototype.slice.call(roots[r].querySelectorAll(sel)).find(usable);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function findIncrease(add) {
+    var roots = [buyBox(add), document];
+    for (var r = 0; r < roots.length; r++) {
+      var found = Array.prototype.slice.call(roots[r].querySelectorAll('button, [role="button"]')).find(function (el) {
+        var label = labelOf(el);
+        return usable(el) && label.length <= 40 && /\b(increase|increment)\b|add one|^\+$|^plus$/i.test(label) && !/add to/i.test(label);
+      });
+      if (found) return found;
+    }
+    return null;
+  }
+
+  /** Set a form field the way typing would, so the site's own code notices. */
+  function setFieldValue(el, value) {
+    var proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('blur', { bubbles: true }));
+  }
+
+  /** Resolves to {ok, method} — method: 'box' | 'plus' | 'none'. */
+  async function setQuantity(add, qty) {
+    if (!qty || qty <= 1) return { ok: true, method: 'default' };
+    var box = findQuantityBox(add);
+    if (box) {
+      if (box.tagName === 'SELECT') {
+        var opt = Array.prototype.slice.call(box.options).find(function (o) { return parseInt(o.value, 10) === qty || parseInt(o.textContent, 10) === qty; });
+        if (!opt) return { ok: false, method: 'box' };
+        setFieldValue(box, opt.value);
+      } else {
+        setFieldValue(box, String(qty));
+      }
+      await wait(150);
+      return { ok: parseInt(box.value, 10) === qty, method: 'box' };
+    }
+    var plus = findIncrease(add);
+    if (plus) {
+      for (var i = 1; i < qty; i++) { plus.click(); await wait(150); }
+      return { ok: true, method: 'plus' };
+    }
+    return { ok: false, method: 'none' };
+  }
+
   // --------------------------------------------------------------------------
   // The flow
   // --------------------------------------------------------------------------
@@ -94,6 +173,8 @@ var TCGBotQuick = (function () {
    *   setStatus(text), report(type, message, product),
    *   followPages: true if this code runs again on the next page (extension);
    *                false for the bookmark button, which asks you to press it again.
+   *   quantity: how many to add (default: the product's quantity, else 1),
+   *   waitForButtonMs: how long to wait for Add to Bag to appear (slow-loading pages).
    * }
    * Resolves to 'checkout' | 'bag' | 'error' | 'stopped' | 'timeout'.
    */
@@ -118,17 +199,29 @@ var TCGBotQuick = (function () {
         return 'error';
       }
       if (!product) { setStatus('Open one of your products first (list below).'); return 'error'; }
-      var add = findAddToBag();
+      var qty = Math.max(1, Math.min(10, parseInt(opts.quantity || product.quantity || 1, 10) || 1));
+      setStatus('Looking for Add to Bag…');
+      var add = await waitForEl(findAddToBag, opts.waitForButtonMs == null ? 1500 : opts.waitForButtonMs);
       if (!add) {
         setStatus("Add to Bag isn't available — sold out, or the page is still loading.");
         report('error', 'Add to Bag not available', product);
         return 'error';
       }
+      var qtyNote = '';
+      if (qty > 1) {
+        setStatus('Setting quantity to ' + qty + '…');
+        var q = await setQuantity(add, qty);
+        if (!q.ok) {
+          qtyNote = ' — couldn\'t set quantity ' + qty + ' on this page, change it in your bag';
+          report('error', "Couldn't set quantity to " + qty + ' on the product page', product);
+        }
+        add = findAddToBag() || add; // the site may have re-drawn the button
+      }
       // Save before clicking in case the site changes page straight away.
-      store.save({ stage: 'add-clicked', startedAt: Date.now(), clickedAt: Date.now(), sku: product.sku });
-      setStatus('Adding to your bag…');
+      store.save({ stage: 'add-clicked', startedAt: Date.now(), clickedAt: Date.now(), sku: product.sku, qty: qty });
+      setStatus('Adding ' + (qty > 1 && !qtyNote ? qty + ' ' : '') + 'to your bag…' + qtyNote);
       add.click();
-      report('add', 'Clicked Add to Bag', product);
+      report('add', 'Clicked Add to Bag' + (qty > 1 ? ' (quantity ' + (qtyNote ? '1' : qty) + ')' : ''), product);
     }
 
     var deadline = Date.now() + 30000;
@@ -255,13 +348,14 @@ var TCGBotQuick = (function () {
     var products = opts.products || [];
     function renderProducts() {
       var cur = productForPage(products);
-      info.textContent = cur ? cur.name + ' · SKU ' + cur.sku
+      info.textContent = cur ? cur.name + ' · SKU ' + cur.sku + ((cur.quantity || 1) > 1 ? ' · Qty ' + cur.quantity : '')
         : onBagPage() ? 'Your bag — press the button to go to checkout.'
           : 'Open one of your products below, then press the button.';
       list.textContent = '';
       products.filter(function (p) { return p.enabled !== false; }).forEach(function (p, i) {
         var price = typeof p.price === 'number' ? ' — $' + p.price : '';
-        var b = button((i + 1) + '. ' + p.name + price);
+        var q = (p.quantity || 1) > 1 ? ' ×' + p.quantity : '';
+        var b = button((i + 1) + '. ' + p.name + price + q);
         if (cur && cur.sku === p.sku) { b.style.borderColor = '#1a2540'; b.style.fontWeight = '700'; }
         b.addEventListener('click', function () { window.open(p.url, '_blank', 'noopener'); });
         list.appendChild(b);
@@ -322,6 +416,7 @@ var TCGBotQuick = (function () {
     onCheckoutPage: onCheckoutPage,
     onBagPage: onBagPage,
     productForPage: productForPage,
+    setQuantity: setQuantity,
     run: run,
     makePanel: makePanel,
     sessionStore: sessionStore,

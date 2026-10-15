@@ -321,11 +321,13 @@ function renderQuick() {
     <li class="${p.enabled ? '' : 'off'}" data-qid="${esc(p.id)}">
       <span class="rank">${i + 1}</span>
       <div>
-        <div class="q-name">${esc(p.name)}${typeof p.price === 'number' ? ` — ${money(p.price)}` : ''}</div>
+        <div class="q-name">${esc(p.name)}${typeof p.price === 'number' ? ` — ${money(p.price)}` : ''}${(p.quantity || 1) > 1 ? ` <span class="pill subtle">×${esc(p.quantity)}</span>` : ''}</div>
         <div class="q-meta">${esc(p.store || '')} · SKU ${esc(p.sku)}${p.enabled ? '' : ' · hidden from the panel'}</div>
       </div>
       <div class="actions">
-        <a class="btn sm go" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener" title="Open in this browser (the panel appears on the page)">Open ↗</a>
+        <label class="qty" title="How many to add to your bag">Qty <input type="number" min="1" max="10" value="${esc(p.quantity || 1)}" data-q="qty"></label>
+        <button class="btn sm buy" data-q="buy" title="Open the product and run Add to Bag → Checkout automatically (needs the TCGBot extension)">⚡ Buy</button>
+        <a class="btn sm" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener" title="Just open the product page">Open ↗</a>
         <button class="btn sm" data-q="up" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button class="btn sm" data-q="down" title="Move down" ${i === q.products.length - 1 ? 'disabled' : ''}>↓</button>
         <button class="btn sm" data-q="toggle">${p.enabled ? 'Hide' : 'Show'}</button>
@@ -357,6 +359,26 @@ $('#quick-list').addEventListener('click', async (ev) => {
   const p = S.quick.products.find((x) => x.id === id);
   if (!p) return;
   const act = btn.dataset.q;
+  if (act === 'qty') return; // handled on change
+  if (act === 'buy') {
+    const quantity = Number(btn.closest('li').querySelector('[data-q="qty"]').value) || 1;
+    // Open the tab now, while we're still inside your click, so pop-up blockers allow it.
+    const w = window.open('about:blank', '_blank');
+    try {
+      const r = await api('POST', '/api/quick/go', { id, quantity });
+      if (w) {
+        w.opener = null;
+        w.location.href = r.url;
+      } else {
+        toast({ level: 'warning', title: 'Your browser blocked the new tab', message: 'Allow pop-ups for 127.0.0.1, or use this link within 2 minutes:', url: r.url }, 0);
+      }
+      toast({ level: 'info', title: `⚡ Buying ${p.name} ×${r.quantity}`, message: 'The TCGBot extension adds it to your bag and goes to checkout in the new tab.' }, 5000);
+    } catch (e) {
+      if (w) w.close();
+      toast({ level: 'error', title: 'Something went wrong', message: e.message });
+    }
+    return;
+  }
   try {
     if (act === 'edit') {
       quickEditingId = id;
@@ -364,6 +386,7 @@ $('#quick-list').addEventListener('click', async (ev) => {
       $('#q-name').value = p.name;
       $('#q-sku').value = p.sku;
       $('#q-price').value = p.price ?? '';
+      $('#q-qty').value = p.quantity || 1;
       $('#quick-form-title').textContent = `Edit: ${p.name}`;
       $('#q-save').textContent = 'Save changes';
       $('#q-cancel').classList.remove('hidden');
@@ -399,6 +422,7 @@ $('#quick-form').addEventListener('submit', async (ev) => {
     name: $('#q-name').value.trim(),
     sku: $('#q-sku').value.trim(),
     price: $('#q-price').value === '' ? null : Number($('#q-price').value),
+    quantity: Number($('#q-qty').value) || 1,
   };
   try {
     if (quickEditingId) await api('PUT', `/api/quick/products/${quickEditingId}`, body);
@@ -412,6 +436,20 @@ $('#quick-form').addEventListener('submit', async (ev) => {
   }
 });
 $('#q-cancel').addEventListener('click', resetQuickForm);
+$('#quick-list').addEventListener('change', async (ev) => {
+  const input = ev.target.closest('[data-q="qty"]');
+  if (!input) return;
+  const id = input.closest('[data-qid]').dataset.qid;
+  const quantity = Math.max(1, Math.min(10, Math.round(Number(input.value) || 1)));
+  input.value = quantity;
+  try {
+    await api('PUT', `/api/quick/products/${id}`, { quantity });
+    S.quick = await api('GET', '/api/quick');
+    renderQuick();
+  } catch (e) {
+    toast({ level: 'error', title: 'Could not save the quantity', message: e.message });
+  }
+});
 $('#bookmarklet').addEventListener('click', (ev) => {
   ev.preventDefault();
   toast({ level: 'info', title: 'Drag it, don\'t click it', message: 'Drag the ⚡ TCGBot Checkout button onto your bookmarks bar, then use it on a product page.' }, 6000);

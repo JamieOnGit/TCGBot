@@ -137,6 +137,7 @@ export function normalizeQuickProduct(input, existing = null) {
     sku: str(src.sku, 60),
     url,
     price: num(src.price, { min: 0, max: 100000, def: null }),
+    quantity: num(src.quantity, { min: 1, max: 10, def: 1, int: true }),
     enabled: bool(src.enabled, true),
   };
   if (!p.sku) throw new ValidationError('Product code (SKU) is required — it is how the panel recognises the product page');

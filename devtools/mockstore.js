@@ -177,8 +177,10 @@ for (const el of document.querySelectorAll('input')) {
           <h1>${esc(prod.name)}</h1>
           <div class="price">$${prod.price.toFixed(2)}</div>
           <p>SKU ${prod.sku}</p>
-          <label>Qty <input name="quantity" type="number" value="1" min="1" style="width:60px"></label>
-          ${BUTTON[prod.status]}
+          ${prod.qtyStyle === 'stepper'
+    ? '<div class="qty-stepper">Qty <button type="button" aria-label="Decrease quantity" id="qminus">−</button> <span id="qval">1</span> <button type="button" aria-label="Increase quantity" id="qplus">+</button></div>'
+    : prod.qtyStyle === 'none' ? '' : '<label>Qty <input name="quantity" type="number" value="1" min="1" style="width:60px"></label>'}
+          <div id="buybox">${prod.lateMs ? '<p>Loading…</p>' : BUTTON[prod.status]}</div>
         </div>
         <section class="recommendations"><h3>You may also like</h3>
           ${other ? `<div class="tile"><a href="${productPath(other)}">${esc(other.name)}</a><button type="button" class="add-to-cart">Add to Cart</button></div>` : ''}
@@ -186,9 +188,14 @@ for (const el of document.querySelectorAll('input')) {
         <div class="drawer" id="drawer"><h3>Added to cart</h3><p id="drawer-msg"></p><a class="btn" href="/checkout">Checkout</a> <a href="/cart">View cart</a></div>
         ${challenge}
         <script>
-          const b = document.getElementById('atc');
-          if (b) b.addEventListener('click', async () => {
-            const qty = Number(document.querySelector('input[name=quantity]').value || 1);
+          ${prod.lateMs ? `setTimeout(() => { document.getElementById('buybox').innerHTML = ${JSON.stringify(BUTTON[prod.status])}; }, ${Number(prod.lateMs)});` : ''}
+          const qval = document.getElementById('qval');
+          document.getElementById('qplus')?.addEventListener('click', () => { qval.textContent = String(Math.min(5, Number(qval.textContent) + 1)); });
+          document.getElementById('qminus')?.addEventListener('click', () => { qval.textContent = String(Math.max(1, Number(qval.textContent) - 1)); });
+          document.addEventListener('click', async (e) => {
+            if (!e.target.closest('#atc')) return;
+            const inp = document.querySelector('input[name=quantity]');
+            const qty = inp ? Number(inp.value || 1) : Number(qval ? qval.textContent : 1);
             const r = await fetch('/api/cart/add', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({sku:'${prod.sku}', qty})});
             const d = await r.json();
             if (d.ok && ${prod.drawer !== false}) { setTimeout(() => { document.getElementById('drawer-msg').textContent = d.count + ' item(s) in cart'; document.getElementById('drawer').classList.add('open'); }, 150); }
