@@ -14,9 +14,9 @@ COPY web ./web
 COPY extension ./extension
 COPY scripts ./scripts
 
-# The database lives on a mounted volume at /data.
-RUN mkdir -p /data && chown node:node /data
-USER node
+# The database lives on a mounted volume at /data. Hosting providers mount
+# volumes owned by root, so the server runs as root inside its own VM/container.
+RUN mkdir -p /data
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

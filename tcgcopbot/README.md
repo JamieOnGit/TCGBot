@@ -76,21 +76,26 @@ printed in the server log.
 
 ### 1. Deploy (Fly.io, Sydney)
 
+Install the Fly command-line tool (`brew install flyctl`, or
+`curl -L https://fly.io/install.sh | sh`), then from the `tcgcopbot` folder:
+
 ```bash
-cd tcgcopbot
-fly launch --no-deploy --copy-config          # pick your app name; update `app` in fly.toml
+fly auth login
+fly apps create <your-app-name>                 # then put the same name in fly.toml: app = "<your-app-name>"
 fly volumes create tcgcopbot_data --region syd --size 1
-fly secrets set DATA_ENCRYPTION_KEY=$(openssl rand -hex 32) \
-  BASE_URL=https://<your-app>.fly.dev ADMIN_EMAILS=you@example.com SUPPORT_EMAIL=support@yourdomain.com
+openssl rand -hex 32                            # your DATA_ENCRYPTION_KEY: save it in a password manager
+fly secrets set DATA_ENCRYPTION_KEY=<that key> BASE_URL=https://<your-app-name>.fly.dev \
+  ADMIN_EMAILS=you@example.com SUPPORT_EMAIL=support@yourdomain.com
 fly deploy
 ```
 
-**Save `DATA_ENCRYPTION_KEY` in your password manager.** If it's lost or changed,
-customers' saved delivery details can't be read any more.
+**Keep `DATA_ENCRYPTION_KEY` safe.** If it's lost or changed, customers' saved
+delivery details can't be read any more.
 
 For your own domain: `fly certs add app.yourdomain.com`, add the DNS records it
-shows, then set `BASE_URL=https://app.yourdomain.com`. Also set
-`EXTRA_ORIGINS=https://<your-app>.fly.dev` if you keep using the fly.dev address.
+shows, then `fly secrets set BASE_URL=https://app.yourdomain.com EXTRA_ORIGINS=https://<your-app-name>.fly.dev`.
+Choose the final address **before** customers install the extension, because
+the address is built into it.
 
 **Render instead:** `render.yaml` is a Blueprint. Render looks for it at the root
 of the repository, so move it there (or give its path when you create the
@@ -98,8 +103,9 @@ Blueprint). Fill in the variables marked `sync: false`. Render needs a paid
 instance for the persistent disk.
 
 Run **one** server instance, because the database is a single SQLite file on
-the volume. Fly snapshots volumes daily. For an extra backup, copy
-`/data/tcgcopbot.db` (for example with `fly ssh sftp get /data/tcgcopbot.db`).
+the volume. Fly snapshots volumes daily. For an extra copy:
+`fly ssh console -C "node /app/scripts/backup.js /data/tcgcopbot.db"`, then
+`fly ssh sftp get /data/backups/<file>`.
 
 ### 2. Payments (Stripe)
 

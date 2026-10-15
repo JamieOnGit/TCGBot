@@ -12,6 +12,7 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "build:extension": "node --disable-warning=ExperimentalWarning scripts/build-extension.js",
     "make-admin": "node --disable-warning=ExperimentalWarning scripts/make-admin.js",
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js",
     "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"test/*.test.js\""
   },
   "devDependencies": {
