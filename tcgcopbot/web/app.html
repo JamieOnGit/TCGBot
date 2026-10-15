@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — {{APP_NAME}}</title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap full">
+      <a class="logo" href="/app"><img src="/img/favicon.svg" alt=""> {{APP_NAME}}</a>
+      <nav>
+        <span id="plan-pill" class="pill"></span>
+        <a class="link opt" id="admin-link" href="/admin" hidden>Admin</a>
+        <span class="muted small opt" id="who"></span>
+        <button class="btn small" id="logout" type="button">Log out</button>
+      </nav>
+    </div>
+  </header>
+
+  <div class="app">
+    <nav class="side" aria-label="Sections">
+      <a href="#quick" data-tab="quick">⚡ Quick Checkout</a>
+      <a href="#watch" data-tab="watch">🔔 Watchlist</a>
+      <a href="#details" data-tab="details">📦 Delivery details</a>
+      <a href="#extension" data-tab="extension">🧩 Extension</a>
+      <a href="#alerts" data-tab="alerts">📣 Alerts</a>
+      <a href="#activity" data-tab="activity">📋 Activity</a>
+      <a href="#billing" data-tab="billing">💳 Billing</a>
+      <a href="#account" data-tab="account">👤 Account</a>
+    </nav>
+
+    <main class="main">
+      <div id="banner"></div>
+
+      <!-- ⚡ Quick Checkout -->
+      <section data-panel="quick" hidden>
+        <div class="tab-head"><h2>Quick Checkout</h2><button class="btn small" id="q-add-toggle" type="button">+ Add product</button></div>
+        <div class="notice" id="ext-status">Checking for the extension…</div>
+        <form class="card" id="q-form" hidden>
+          <h3 id="q-form-title">Add a product</h3>
+          <label for="q-url">Product link</label>
+          <input id="q-url" name="url" type="url" placeholder="https://www.kmart.com.au/product/…-43818648/" required>
+          <div class="grid3">
+            <div><label for="q-name">Name</label><input id="q-name" name="name" placeholder="Shown on your list"></div>
+            <div><label for="q-sku">SKU / keycode</label><input id="q-sku" name="sku" placeholder="From the link"></div>
+            <div><label for="q-price">Price ($)</label><input id="q-price" name="price" type="number" min="0" step="0.01"></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary" type="submit" id="q-save">Add product</button>
+            <button class="btn" type="button" id="q-cancel">Cancel</button>
+            <span class="msg" id="q-msg"></span>
+          </div>
+        </form>
+        <div class="card">
+          <p class="muted small">Set the quantity, then press <b>⚡ Buy</b>. A new tab opens the product, and the extension adds it to your bag, goes to checkout and fills in your details. You press the final button.</p>
+          <ul class="items" id="q-list"></ul>
+          <div class="form-actions"><button class="btn small" type="button" id="q-starter">Add the starter list</button></div>
+        </div>
+      </section>
+
+      <!-- 🔔 Watchlist -->
+      <section data-panel="watch" hidden>
+        <div class="tab-head"><h2>Watchlist</h2></div>
+        <p class="muted">Get an alert as soon as a product is in stock or open for pre-order. Each page is checked about every <span id="w-interval">60</span> seconds.</p>
+        <form class="card" id="w-form">
+          <label for="w-url">Product link</label>
+          <input id="w-url" name="url" type="url" placeholder="https://…" required>
+          <div class="grid2">
+            <div><label for="w-name">Name</label><input id="w-name" name="name" placeholder="e.g. OP-18 Booster Box"></div>
+            <div><label for="w-max">Only alert me at or below ($)</label><input id="w-max" name="maxPrice" type="number" min="0" step="0.01" placeholder="Any price"></div>
+          </div>
+          <div class="form-actions"><button class="btn primary" type="submit">Watch this product</button><span class="msg" id="w-msg"></span></div>
+        </form>
+        <div class="card"><ul class="items" id="w-list"></ul></div>
+      </section>
+
+      <!-- 📦 Delivery details -->
+      <section data-panel="details" hidden>
+        <div class="tab-head"><h2>Delivery details</h2></div>
+        <p class="muted">Used by the extension to fill in checkout. Encrypted, and only for your account. Anything a store already filled in from your store account is left as it is.</p>
+        <form class="card" id="p-form">
+          <div class="grid2">
+            <div><label for="p-first">First name</label><input id="p-first" name="firstName" autocomplete="given-name"></div>
+            <div><label for="p-last">Last name</label><input id="p-last" name="lastName" autocomplete="family-name"></div>
+            <div><label for="p-email">Checkout email</label><input id="p-email" name="email" type="email" autocomplete="email"></div>
+            <div><label for="p-phone">Mobile</label><input id="p-phone" name="phone" type="tel" autocomplete="tel"></div>
+          </div>
+          <label for="p-a1">Street address</label><input id="p-a1" name="address1" autocomplete="address-line1">
+          <label for="p-a2">Unit / apartment <span class="muted">(optional)</span></label><input id="p-a2" name="address2" autocomplete="address-line2">
+          <div class="grid3">
+            <div><label for="p-suburb">Suburb</label><input id="p-suburb" name="suburb" autocomplete="address-level2"></div>
+            <div><label for="p-state">State</label>
+              <select id="p-state" name="state" autocomplete="address-level1">
+                <option value="">—</option><option>NSW</option><option>VIC</option><option>QLD</option><option>WA</option><option>SA</option><option>TAS</option><option>ACT</option><option>NT</option>
+              </select></div>
+            <div><label for="p-postcode">Postcode</label><input id="p-postcode" name="postcode" inputmode="numeric" maxlength="4" autocomplete="postal-code"></div>
+          </div>
+          <div class="form-actions"><button class="btn primary" type="submit">Save details</button><span class="msg" id="p-msg"></span></div>
+        </form>
+        <div class="card">
+          <h3>Payment card</h3>
+          <p class="muted">Your card is <b>never stored on our servers</b>. Save it in the extension's Settings instead: it's kept in that browser only, encrypted with a passphrase you choose, and tied to your account. Unlock it when you're ready to buy, and checkout fills it in for you.</p>
+        </div>
+      </section>
+
+      <!-- 🧩 Extension -->
+      <section data-panel="extension" hidden>
+        <div class="tab-head"><h2>Browser extension</h2></div>
+        <div class="notice" id="ext-status-2">Checking for the extension…</div>
+        <div class="card">
+          <h3>1. Install</h3>
+          <p id="store-install" hidden><a class="btn primary" id="store-link" href="#" target="_blank" rel="noopener">Add to Chrome</a></p>
+          <ol id="zip-install">
+            <li><a class="btn small" href="/download/extension.zip">Download the extension</a> and unzip it.</li>
+            <li>Open <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>) and turn on <b>Developer mode</b>.</li>
+            <li>Click <b>Load unpacked</b> and choose the unzipped <code>…-extension</code> folder.</li>
+            <li>Come back to this page and reload it.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>2. Connect it to your account</h3>
+          <p class="muted">The extension only ever sees your account: your products, your details, your ⚡ Buy codes.</p>
+          <div class="form-actions">
+            <button class="btn primary" id="pair-now" type="button">Connect this browser</button>
+            <button class="btn" id="pair-code-btn" type="button">Show a connection code</button>
+          </div>
+          <div id="pair-code-box" hidden>
+            <p>In the extension's popup or Settings, enter:</p>
+            <p><span class="code-big" id="pair-code"></span></p>
+            <p class="muted small" id="pair-expiry"></p>
+          </div>
+          <p class="msg" id="pair-msg"></p>
+        </div>
+        <div class="card">
+          <h3>3. Save your card (optional)</h3>
+          <p class="muted">Click the extension's icon → <b>Card settings</b>. Your card stays in that browser, encrypted with your passphrase, and is never sent to us.</p>
+        </div>
+        <div class="card">
+          <h3>Connected browsers</h3>
+          <ul class="items" id="devices"></ul>
+        </div>
+      </section>
+
+      <!-- 📣 Alerts -->
+      <section data-panel="alerts" hidden>
+        <div class="tab-head"><h2>Alerts</h2></div>
+        <form class="card" id="a-form">
+          <label for="a-hook">Discord webhook <span class="muted">(optional)</span></label>
+          <input id="a-hook" name="discordWebhook" type="url" placeholder="https://discord.com/api/webhooks/…">
+          <p class="muted small">In Discord: Server settings → Integrations → Webhooks → New webhook → Copy webhook URL.</p>
+          <label for="a-mention">Mention <span class="muted">(optional, e.g. &lt;@your-user-id&gt;)</span></label>
+          <input id="a-mention" name="discordMention">
+          <label class="check"><input type="checkbox" id="a-email-restock" name="emailOnRestock"> Email me when a watched product is available</label>
+          <label class="check"><input type="checkbox" id="a-email-checkout" name="emailOnCheckout"> Email me when a checkout is filled in and waiting for me</label>
+          <p class="muted small" id="a-email-note"></p>
+          <div class="form-actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="a-test">Send a test alert</button><span class="msg" id="a-msg"></span></div>
+        </form>
+      </section>
+
+      <!-- 📋 Activity -->
+      <section data-panel="activity" hidden>
+        <div class="tab-head"><h2>Activity</h2></div>
+        <div class="card"><ul class="feed" id="feed"></ul><div class="form-actions"><button class="btn small" id="feed-more" type="button">Show more</button></div></div>
+      </section>
+
+      <!-- 💳 Billing -->
+      <section data-panel="billing" hidden>
+        <div class="tab-head"><h2>Billing</h2></div>
+        <div class="card">
+          <dl class="kv" id="b-info"></dl>
+          <div class="form-actions">
+            <button class="btn primary" id="b-subscribe" type="button" hidden>Subscribe — {{PRICE}}</button>
+            <button class="btn" id="b-portal" type="button" hidden>Manage billing / cancel</button>
+            <span class="msg" id="b-msg"></span>
+          </div>
+          <p class="muted small" id="b-note"></p>
+        </div>
+      </section>
+
+      <!-- 👤 Account -->
+      <section data-panel="account" hidden>
+        <div class="tab-head"><h2>Account</h2></div>
+        <form class="card" id="acct-form">
+          <h3>Profile</h3>
+          <label for="acct-email">Email</label><input id="acct-email" disabled>
+          <label for="acct-name">Name</label><input id="acct-name" name="name" autocomplete="name">
+          <div class="form-actions"><button class="btn primary" type="submit">Save</button><span class="msg" id="acct-msg"></span></div>
+        </form>
+        <form class="card" id="pw-form">
+          <h3>Change password</h3>
+          <label for="pw-current">Current password</label><input id="pw-current" name="current" type="password" autocomplete="current-password" required>
+          <label for="pw-next">New password <span class="muted">(at least 10 characters)</span></label><input id="pw-next" name="next" type="password" autocomplete="new-password" minlength="10" required>
+          <div class="form-actions"><button class="btn primary" type="submit">Change password</button><span class="msg" id="pw-msg"></span></div>
+          <p class="muted small">Changing your password signs out your other browsers.</p>
+        </form>
+        <div class="card">
+          <h3>Your data</h3>
+          <p class="muted">Download everything stored about you: your account, delivery details, lists, watchlist, alert settings, connected browsers and activity.</p>
+          <a class="btn" href="/api/me/export" download>Download my data</a>
+        </div>
+        <form class="card" id="del-form">
+          <h3>Delete account</h3>
+          <p class="muted">Deletes your account and everything in it, and cancels your subscription. This can't be undone.</p>
+          <label for="del-pw">Password</label><input id="del-pw" name="password" type="password" autocomplete="current-password" required>
+          <div class="form-actions"><button class="btn danger" type="submit">Delete my account</button><span class="msg" id="del-msg"></span></div>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+# Fly.io — see README "Deploy to Fly.io". Change `app` to your own app name.
+app = "tcgcopbot"
+primary_region = "syd"   # Sydney
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  DATABASE_PATH = "/data/tcgcopbot.db"
+  TRUST_PROXY = "1"
+
+# The database file. Fly snapshots volumes daily.
+[[mounts]]
+  source = "tcgcopbot_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep one machine running: the restock monitor works in the background.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 800
+    hard_limit = 1000
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

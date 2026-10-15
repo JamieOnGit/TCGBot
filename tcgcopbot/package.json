@@ -1,0 +1,20 @@
+{
+  "name": "tcgcopbot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TCGCopBot — hosted restock alerts and checkout assist for TCG collectors. Every user has their own account, product list, watchlist and details.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "build:extension": "node --disable-warning=ExperimentalWarning scripts/build-extension.js",
+    "make-admin": "node --disable-warning=ExperimentalWarning scripts/make-admin.js",
+    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"test/*.test.js\""
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}

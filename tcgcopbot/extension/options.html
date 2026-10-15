@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TCGCopBot settings</title>
+  <link rel="stylesheet" href="ext.css">
+</head>
+<body>
+  <main class="page">
+    <h1><img class="logo" src="icon48.png" alt=""> <span id="app-name">TCGCopBot</span> settings</h1>
+
+    <h2>Your account</h2>
+    <div class="card">
+      <div id="acct-out" hidden>
+        <p>Not connected. In your dashboard, open <b>Extension</b> and press <b>Connect this browser</b>, or enter the code shown there:</p>
+        <form id="pair-form" class="row">
+          <input id="pair-code" placeholder="ABCD-2345" autocomplete="off" maxlength="12" aria-label="Connection code">
+          <button class="primary" type="submit" style="flex:0">Connect</button>
+        </form>
+        <div id="pair-msg" class="msg"></div>
+      </div>
+      <div id="acct-in" hidden>
+        <p>Connected as <b id="who"></b> <span id="plan" class="pill"></span></p>
+        <button id="unpair">Disconnect this browser</button>
+      </div>
+    </div>
+
+    <h2>Card for checkout</h2>
+    <p class="muted">Your card is saved <b>only in this browser</b>, encrypted with a passphrase you choose, and only for the account above. It is never sent to TCGCopBot's servers. When you start a checkout, the extension types it into the store's own card form — and you still press the final button yourself.</p>
+    <div class="card" id="card-none-acct" hidden><p class="muted">Connect your account first.</p></div>
+
+    <div class="card" id="card-saved" hidden>
+      <p><b id="card-label"></b> <span id="card-state" class="pill"></span></p>
+      <form id="unlock-form">
+        <label for="unlock-pass">Passphrase</label>
+        <input id="unlock-pass" type="password" autocomplete="current-password">
+        <label for="unlock-hours">Keep unlocked</label>
+        <select id="unlock-hours">
+          <option value="0">Until I close the browser</option>
+          <option value="1">For 1 hour</option>
+          <option value="12">For 12 hours</option>
+        </select>
+        <p><button class="primary" type="submit">Unlock card</button></p>
+      </form>
+      <p class="row"><button id="lock" hidden>Lock now</button><button id="remove">Remove card from this browser</button></p>
+      <div id="saved-msg" class="msg"></div>
+    </div>
+
+    <form class="card" id="card-form" hidden>
+      <p id="card-form-title"><b>Save a card</b></p>
+      <label for="c-number">Card number</label>
+      <input id="c-number" inputmode="numeric" autocomplete="cc-number">
+      <label for="c-name">Name on card</label>
+      <input id="c-name" autocomplete="cc-name">
+      <div class="row">
+        <div><label for="c-exp">Expiry (MM/YY)</label><input id="c-exp" placeholder="MM/YY" autocomplete="cc-exp"></div>
+        <div><label for="c-cvc">CVV (optional)</label><input id="c-cvc" inputmode="numeric" autocomplete="cc-csc" maxlength="4"></div>
+      </div>
+      <p class="muted" style="font-size:12px">Leave CVV blank to type it in at checkout yourself.</p>
+      <label for="c-pass">Passphrase (at least 6 characters — not your account password)</label>
+      <input id="c-pass" type="password" autocomplete="new-password">
+      <label for="c-pass2">Passphrase again</label>
+      <input id="c-pass2" type="password" autocomplete="new-password">
+      <p><button class="primary" type="submit">Save card</button></p>
+      <div id="card-msg" class="msg"></div>
+    </form>
+
+    <p class="muted" id="foot" style="font-size:12px"></p>
+  </main>
+  <script src="config.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

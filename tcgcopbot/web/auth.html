@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{APP_NAME}}</title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap"><a class="logo" href="/"><img src="/img/favicon.svg" alt=""> {{APP_NAME}}</a></div>
+  </header>
+  <main class="auth">
+    <!-- Log in -->
+    <form class="card" id="login" hidden>
+      <h1>Log in</h1>
+      <label for="li-email">Email</label>
+      <input id="li-email" name="email" type="email" autocomplete="email" required>
+      <label for="li-password">Password</label>
+      <input id="li-password" name="password" type="password" autocomplete="current-password" required>
+      <div class="form-actions"><button class="btn primary block" type="submit">Log in</button></div>
+      <p class="msg" id="li-msg"></p>
+      <p class="small"><a href="/forgot">Forgot your password?</a></p>
+      <p class="small muted">New here? <a href="/signup">Start your free trial</a></p>
+    </form>
+
+    <!-- Sign up -->
+    <form class="card" id="signup" hidden>
+      <h1>Start your free trial</h1>
+      <p class="muted">{{TRIAL_DAYS}} days free, no card needed. Then {{PRICE}}.</p>
+      <label for="su-name">Your name <span class="muted">(optional)</span></label>
+      <input id="su-name" name="name" autocomplete="name">
+      <label for="su-email">Email</label>
+      <input id="su-email" name="email" type="email" autocomplete="email" required>
+      <label for="su-password">Password <span class="muted">(at least 10 characters)</span></label>
+      <input id="su-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
+      <label class="check"><input type="checkbox" name="acceptTerms" id="su-terms" required> <span>I agree to the <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a>.</span></label>
+      <div class="form-actions"><button class="btn primary block" type="submit">Create account</button></div>
+      <p class="msg" id="su-msg"></p>
+      <p class="small muted">Already have an account? <a href="/login">Log in</a></p>
+    </form>
+
+    <!-- Forgot password -->
+    <form class="card" id="forgot" hidden>
+      <h1>Reset your password</h1>
+      <p class="muted">Enter your email and we'll send you a link to choose a new password.</p>
+      <label for="fp-email">Email</label>
+      <input id="fp-email" name="email" type="email" autocomplete="email" required>
+      <div class="form-actions"><button class="btn primary block" type="submit">Send reset link</button></div>
+      <p class="msg" id="fp-msg"></p>
+      <p class="small"><a href="/login">Back to log in</a></p>
+    </form>
+
+    <!-- Choose a new password -->
+    <form class="card" id="reset" hidden>
+      <h1>Choose a new password</h1>
+      <label for="rp-password">New password <span class="muted">(at least 10 characters)</span></label>
+      <input id="rp-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
+      <div class="form-actions"><button class="btn primary block" type="submit">Save password</button></div>
+      <p class="msg" id="rp-msg"></p>
+    </form>
+  </main>
+  <script type="module" src="/js/auth.js"></script>
+</body>
+</html>

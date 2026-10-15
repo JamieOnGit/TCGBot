@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin — {{APP_NAME}}</title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <a class="logo" href="/app"><img src="/img/favicon.svg" alt=""> {{APP_NAME}} <span class="pill">Admin</span></a>
+      <nav><a class="link" href="/app">← Dashboard</a></nav>
+    </div>
+  </header>
+  <main class="wrap" id="admin">
+    <h2 class="mt">Overview</h2>
+    <div class="stats" id="stats"></div>
+
+    <div class="card">
+      <div class="tab-head"><h2>Customers</h2>
+        <form id="search" class="status-row"><input id="q" type="search" placeholder="Search email or name" aria-label="Search customers"><button class="btn small" type="submit">Search</button></form>
+      </div>
+      <p class="muted small">You can see accounts and plans. Customers' delivery details, lists and activity are private and not shown here.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Customer</th><th>Plan</th><th>Joined</th><th>Last login</th><th>Usage</th><th>Actions</th></tr></thead>
+          <tbody id="users"></tbody>
+        </table>
+      </div>
+      <div class="form-actions"><button class="btn small" id="prev" type="button">← Previous</button><span class="muted small" id="page-info"></span><button class="btn small" id="next" type="button">Next →</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Audit log</h2>
+      <ul class="feed" id="audit"></ul>
+    </div>
+  </main>
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — {{APP_NAME}}</title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+  <header class="topbar"><div class="wrap"><a class="logo" href="/"><img src="/img/favicon.svg" alt=""> {{APP_NAME}}</a></div></header>
+  <main class="legal">
+    <h1>Privacy Policy</h1>
+    <p class="notice warn"><b>Template — have a lawyer review this before you launch.</b> Replace the [bracketed] parts with your business details.</p>
+    <p class="muted">Last updated: [date]</p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><b>Account:</b> your email, name (optional) and a scrambled (hashed) version of your password. We never store the password itself.</li>
+      <li><b>Delivery details</b> you choose to save: name, checkout email, phone and address. Encrypted with a key unique to your account.</li>
+      <li><b>Your lists:</b> Quick Checkout products, watchlist, alert settings (encrypted) and an activity log.</li>
+      <li><b>Connected browsers:</b> the name and version of each browser you connect the extension to.</li>
+      <li><b>Billing:</b> handled by Stripe. We keep your Stripe customer ID and plan status, not your card.</li>
+    </ul>
+
+    <h2>What we don't collect</h2>
+    <p><b>Your payment card.</b> If you save a card in the {{APP_NAME}} extension, it stays in that browser only. It's encrypted with a passphrase you choose and is never sent to us. We don't see your store logins or passwords, and we don't track your browsing. The extension only runs on the supported stores' pages, on payment boxes inside those pages, and on {{APP_NAME}} itself.</p>
+
+    <h2>How we use it</h2>
+    <p>Only to provide {{APP_NAME}} to you: filling in checkout when you ask, sending the alerts you set up, billing, account emails such as password resets, and keeping the service secure. We don't sell your data and don't use it for advertising.</p>
+
+    <h2>Who can see it</h2>
+    <p>Your data is tied to your login. Other users can never see it. Our staff can see your email, plan and usage counts to provide support, but not your delivery details, lists or activity. Service providers we use: [hosting provider] (servers), Stripe (payments), [email provider] (emails), and Discord if you add your own webhook.</p>
+
+    <h2>Security</h2>
+    <p>Passwords are hashed with scrypt. Delivery details and alert settings are encrypted with AES-256 under a key unique to your account. Connections use HTTPS. Logins and browser connections can be revoked at any time.</p>
+
+    <h2>Your choices</h2>
+    <p>You can see and change your details in your dashboard and download everything we hold about you (Account → Download my data). If you delete your account, all of your data is deleted, including your encryption key, so backups of it can't be read. To ask a question, or to complain under the Australian Privacy Principles, contact {{SUPPORT_EMAIL}}. If we can't resolve it, you can contact the OAIC (oaic.gov.au).</p>
+
+    <h2>Where data is stored</h2>
+    <p>[Region of your hosting, e.g. Sydney, Australia].</p>
+    <p><a href="/">← Back to {{APP_NAME}}</a></p>
+  </main>
+</body>
+</html>

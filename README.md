@@ -8,6 +8,10 @@ saved details, and **stops on the final "Place order" button** for you to click.
 
 Everything is controlled from a local dashboard at <http://127.0.0.1:8787>.
 
+> **TCGCopBot** — the hosted, multi-user version you can sell (sign-up, a private
+> dashboard per customer, Stripe subscriptions, admin page, browser extension that
+> connects to each customer's own account) — lives in [`tcgcopbot/`](tcgcopbot/README.md).
+
 | Retailer | How it's checked |
 |---|---|
 | EB Games, Zing Pop Culture | product page, search for unlisted items |

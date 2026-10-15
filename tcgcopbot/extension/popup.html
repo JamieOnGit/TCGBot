@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TCGCopBot</title>
+  <link rel="stylesheet" href="ext.css">
+</head>
+<body class="popup">
+  <h1><img class="logo" src="icon48.png" alt=""> <span id="app-name">TCGCopBot</span></h1>
+
+  <section id="signed-out" hidden>
+    <p>Connect this browser to your account. In your dashboard, open <b>Extension</b> and press <b>Connect this browser</b> — or enter the code shown there:</p>
+    <form id="pair-form" class="row">
+      <input id="pair-code" placeholder="ABCD-2345" autocomplete="off" maxlength="12" aria-label="Connection code">
+      <button class="primary" type="submit" style="flex:0">Connect</button>
+    </form>
+    <div id="pair-msg" class="msg"></div>
+    <p><a class="btn" id="open-dash" href="#" target="_blank">Open dashboard ↗</a></p>
+  </section>
+
+  <section id="signed-in" hidden>
+    <p><span id="who" class="muted"></span> <span id="plan" class="pill"></span></p>
+    <div class="card">
+      <div class="row"><b style="flex:0 0 auto">Card</b> <span id="card-status" class="muted" style="text-align:right"></span></div>
+      <form id="unlock-form" class="row" hidden style="margin-top:8px">
+        <input id="unlock-pass" type="password" placeholder="Card passphrase" autocomplete="current-password" aria-label="Card passphrase">
+        <button class="primary" type="submit" style="flex:0">Unlock</button>
+      </form>
+      <div id="card-msg" class="msg"></div>
+      <div class="row" style="margin-top:4px"><button id="lock" hidden>Lock card</button><a class="btn" href="options.html" target="_blank" id="card-settings">Card settings</a></div>
+    </div>
+    <b>Your products</b>
+    <ul id="products" class="list"></ul>
+    <p class="row" style="margin-top:10px"><a class="btn" id="open-dash2" href="#" target="_blank">Dashboard ↗</a> <a class="btn" href="options.html" target="_blank">Settings</a></p>
+  </section>
+  <p class="muted" id="foot" style="font-size:11px;margin-top:10px"></p>
+  <script src="config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
