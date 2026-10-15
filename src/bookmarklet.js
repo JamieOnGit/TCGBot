@@ -38,11 +38,11 @@ function go() {
 if (busy) return;
 busy = true;
 panel.startButton.disabled = true;
-TCGBotQuick.run({ fresh: true, product: TCGBotQuick.productForPage(products), store: store, setStatus: panel.setStatus, followPages: false })
+TCGBotQuick.run({ fresh: true, product: TCGBotQuick.productForPage(products), products: products, store: store, setStatus: panel.setStatus, followPages: false })
 .catch(function () { panel.setStatus('Interrupted - please continue yourself.'); })
 .then(function () { busy = false; panel.startButton.disabled = false; });
 }
-panel = TCGBotQuick.makePanel({ products: products, note: 'Bookmark button. If the store takes you to the bag page, click the bookmark again there.', onStart: go, onStop: function () { store.clear(); panel.setStatus('Stopped.'); } });
+panel = TCGBotQuick.makePanel({ products: products, note: 'Bookmark button: if the store takes you to the bag page, click the bookmark again there.', onStart: go, onStop: function () { store.clear(); panel.setStatus('Stopped.'); } });
 window.__tcgbotQuick = { go: go };
 if (TCGBotQuick.productForPage(products) || TCGBotQuick.onBagPage()) go();
 `;

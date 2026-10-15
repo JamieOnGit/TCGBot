@@ -73,10 +73,21 @@ export function fullState(app) {
   };
 }
 
+const EXTENSION_VERSION = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(EXTENSION_DIR, 'manifest.json'), 'utf8')).version; } catch { return null; }
+})();
+
 export function quickView(app) {
+  const p = app.store.profile;
   return {
     rev: app.store.quick.rev,
     extensionPath: EXTENSION_DIR,
+    extensionVersion: EXTENSION_VERSION,
+    autofill: {
+      profileReady: !!(p.email && p.firstName && p.address1 && p.suburb && p.state && p.postcode),
+      cardSaved: app.vault.exists(),
+      cardUnlocked: app.vault.unlocked,
+    },
     products: app.store.quick.products.map((p) => {
       const d = detectRetailer(p.url);
       return { ...p, store: d ? d.name : '' };
@@ -224,12 +235,48 @@ export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
     app.bus.log('info', `[Quick Checkout] ${product.name}: ⚡ Buy pressed (quantity ${product.quantity})`);
     return { url: u.href, quantity: product.quantity };
   });
+  // Autofill passes: let the extension fetch your profile/card for one store's
+  // checkout, for 15 minutes. Issued only for a redeemed ⚡ Buy code, or when
+  // the extension asks after you pressed its panel button.
+  const fillPasses = new Map();
+  const FILL_TTL_MS = 15 * 60 * 1000;
+  const newFillPass = (host) => {
+    const now = Date.now();
+    for (const [t, v] of fillPasses) if (now - v.created > FILL_TTL_MS) fillPasses.delete(t);
+    const token = crypto.randomBytes(18).toString('base64url');
+    fillPasses.set(token, { host, created: now, uses: 0, logged: false });
+    return token;
+  };
   route('POST', '/api/quick/claim', async (req) => {
     const body = await readJson(req);
     const entry = goCodes.get(String(body.code || ''));
     goCodes.delete(String(body.code || ''));
     if (!entry || Date.now() - entry.created > GO_TTL_MS) throw new HttpError(404, 'Unknown or expired code');
-    return { ok: true, sku: entry.sku, name: entry.name, quantity: entry.quantity };
+    const product = app.store.getQuickProduct(entry.id);
+    const host = product ? new URL(product.url).host : '';
+    return { ok: true, sku: entry.sku, name: entry.name, quantity: entry.quantity, fillToken: newFillPass(host), host };
+  });
+  route('POST', '/api/quick/fill-token', async (req) => {
+    const body = await readJson(req);
+    const host = String(body.host || '').slice(0, 200);
+    if (!host) throw new HttpError(400, 'host required');
+    return { fillToken: newFillPass(host), host };
+  });
+  route('POST', '/api/quick/fill', async (req) => {
+    const body = await readJson(req);
+    const pass = fillPasses.get(String(body.token || ''));
+    if (!pass || Date.now() - pass.created > FILL_TTL_MS || pass.uses >= 80) throw new HttpError(403, 'Autofill pass expired — press ⚡ Buy again');
+    pass.uses += 1;
+    if (!pass.logged) {
+      pass.logged = true;
+      app.bus.log('info', `[Quick Checkout] Sent your saved details to the extension to fill in checkout${pass.host ? ` on ${pass.host}` : ''}${app.vault.unlocked ? ' (card included)' : ' (card locked — not included)'}.`);
+    }
+    const c = app.vault.card;
+    return {
+      profile: app.store.profile,
+      card: c ? { number: c.number, name: c.name, expMonth: c.expMonth, expYear: c.expYear, cvc: c.cvc || '' } : null,
+      cardLocked: !c && app.vault.exists(),
+    };
   });
 
   let quickEvents = [];
@@ -237,7 +284,7 @@ export function createServer({ app, port = 8787, host = '127.0.0.1' }) {
     const body = await readJson(req);
     const now = Date.now();
     quickEvents = quickEvents.filter((t) => now - t < 60000);
-    if (quickEvents.length >= 30) throw new HttpError(429, 'Too many events');
+    if (quickEvents.length >= 300) throw new HttpError(429, 'Too many events');
     quickEvents.push(now);
     const type = String(body.type || '');
     if (!QUICK_EVENT_TYPES.has(type)) throw new HttpError(400, 'Unknown event type');

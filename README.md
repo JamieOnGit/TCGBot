@@ -34,10 +34,30 @@ it and never reloads pages by itself. Use either option:
    Bag → Checkout** in the panel bottom right. If the store goes to the bag page,
    the extension carries on to checkout by itself.
 
+After adding to bag, the extension carries on through checkout (Kmart:
+**Continue to details → Continue to delivery → Continue to payment**). It keeps
+whatever the store already filled in from your account and fills empty fields
+from **Profile & payment**: your address, home delivery, and card payment with
+your card's number, expiry and CVV (if the card is unlocked). It also fills card
+boxes inside the payment provider's frame. It then stops with the final button
+(**Checkout securely**, Place order, Pay now…) highlighted. **TCGBot never
+presses that button — you do.** It never ticks marketing boxes (e.g. Kmail).
+
 Each **⚡ Buy** press creates a one-time code (valid for 2 minutes) that the
 extension checks with your dashboard before starting, so no other website can
-trigger an add-to-bag. Quantity is set with the page's quantity box or its +/−
-buttons. If a page has neither, it adds 1 and tells you to change it in your bag.
+trigger an add-to-bag. Your address and card go to the extension only with the
+short-lived pass that code unlocks, only for that store's tab, and they're
+never saved in the browser.
+
+Quantity is set with the page's quantity box or its +/− buttons. If the product
+page has neither, it's set in the bag before checkout. If the store caps the
+quantity (e.g. 2 per customer), it adds the maximum and tells you.
+
+The panel sits small in the top-left corner. Drag it by its title to move it
+(it remembers where), or press – to shrink it. The Quick Checkout tab shows
+whether this browser has the extension and whether it's up to date. **After
+updating TCGBot, remove the extension and Load unpacked again** (or press ↻ on it
+in `chrome://extensions`), then reload your store tabs.
 
 The extension uses your dashboard's product list and reports "added to bag" and
 "at checkout" back to it, and to Discord if you've set it up. If TCGBot isn't
@@ -141,14 +161,14 @@ your own purchases and keep the check interval reasonable (10–30s).
 npm test
 ```
 
-There are 67 tests (they need Node.js 22+). They cover:
+There are 75 tests (they need Node.js 22+). They cover:
 - HTML parsing and stock detection
 - keyword matching (including the presets)
 - form-field recognition
 - the monitor engine over real HTTP
 - the dashboard API, including the security checks
 - the dashboard UI driven by a real browser
-- Quick Checkout: the real extension loaded into Chromium, and the bookmark button, both run on the fake store. Covers ⚡ Buy from the dashboard with a quantity (quantity box and +/− buttons), slow-loading pages, the "added to bag" popup, the bag page, and refusing made-up codes
+- Quick Checkout: the real extension loaded into Chromium, and the bookmark button, both run on the fake store. Covers ⚡ Buy from the dashboard with a quantity (quantity box, +/− buttons, set in the bag, store limits), slow-loading pages, the "added to bag" popup, the bag page, refusing made-up codes, and a Kmart-style checkout (details → delivery → payment, card in the page or in a payment iframe, card locked) that stops at "Checkout securely" without pressing it
 - **end-to-end checkout** in headless Chromium against the fake store
 
 The end-to-end checkout tests cover:

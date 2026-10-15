@@ -196,3 +196,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--muted); }
 .quick-list .qty { display: inline-flex; align-items: center; gap: 4px; font-size: .85rem; color: var(--muted); }
 .quick-list .qty input { width: 56px; padding: 4px 6px; }
 .btn.buy { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.quick-status { display: grid; gap: 6px; margin: 10px 0 14px; }
+.quick-status .qs { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: .9rem; }
+.quick-status .qs.ok { border-color: color-mix(in srgb, var(--accent) 50%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.quick-status .qs.warn { border-color: color-mix(in srgb, var(--amber) 60%, transparent); background: color-mix(in srgb, var(--amber) 12%, transparent); }

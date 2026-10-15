@@ -31,6 +31,7 @@ test('opens on Quick Checkout with the default product list', async () => {
   assert.equal(await page.locator('#quick-list li[data-qid]').count(), 7);
   assert.match(await page.textContent('#quick-list li:first-child'), /Day UPC — \$360\.00/);
   assert.match(await page.textContent('#ext-path'), /extension$/);
+  assert.match(await page.textContent('#quick-status'), /isn't in this browser/, 'warns when ⚡ Buy can\'t run automatically');
   await page.waitForFunction(() => document.querySelector('#bookmarklet').getAttribute('href').startsWith('javascript:'));
   // Add a product: SKU is detected from the link.
   await page.fill('#q-url', env.store.productUrl('311002'));

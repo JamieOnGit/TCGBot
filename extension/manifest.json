@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "TCGBot Quick Checkout",
-  "version": "1.0.0",
-  "description": "One click on a product page: Add to Bag → Bag → Checkout, for the products in your TCGBot dashboard. You finish checkout yourself.",
+  "version": "1.1.0",
+  "description": "⚡ Buy from your TCGBot dashboard: sets quantity, adds to bag, fills in checkout and stops at the final button for you to press.",
   "permissions": ["storage"],
   "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
   "background": { "service_worker": "background.js" },
@@ -21,8 +21,50 @@
         "http://127.0.0.1/*",
         "http://localhost/*"
       ],
-      "js": ["core.js", "content.js"],
+      "js": ["capture.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.kmart.com.au/*",
+        "https://www.ebgames.com.au/*",
+        "https://www.zingpopculture.com.au/*",
+        "https://www.jbhifi.com.au/*",
+        "https://www.target.com.au/*",
+        "https://www.bigw.com.au/*",
+        "https://www.toysrus.com.au/*",
+        "https://www.amazon.com.au/*",
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "js": ["core.js", "fill.js", "content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.adyen.com/*",
+        "https://*.braintreegateway.com/*",
+        "https://js.stripe.com/*",
+        "https://*.cybersource.com/*",
+        "https://*.checkout.com/*",
+        "https://*.worldpay.com/*",
+        "https://*.qvalent.com/*",
+        "https://*.payway.com.au/*",
+        "https://*.windcave.com/*",
+        "https://*.eway.io/*",
+        "https://*.securepay.com.au/*",
+        "https://checkout.shopifycs.com/*",
+        "https://www.kmart.com.au/*",
+        "https://www.ebgames.com.au/*",
+        "https://www.target.com.au/*",
+        "https://www.bigw.com.au/*",
+        "https://www.jbhifi.com.au/*",
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "js": ["fill.js", "frame.js"],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ]
 }

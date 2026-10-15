@@ -311,10 +311,34 @@ async function refreshBookmarklet() {
   } catch { bookmarkletRev = null; }
 }
 
+function extensionVersion() {
+  return document.documentElement.getAttribute('data-tcgbot-extension');
+}
+
+function renderQuickStatus() {
+  const q = S.quick;
+  const have = extensionVersion();
+  const want = q.extensionVersion;
+  const p = S.profile;
+  const lines = [];
+  if (!have) {
+    lines.push(['warn', `<b>The TCGBot extension isn't in this browser</b>, so ⚡ Buy will only open the page. Open this dashboard (<code>${esc(location.origin)}</code>) in the browser where you loaded the extension, or follow Option 1 below. (Safari: use the bookmark button.)`]);
+  } else if (want && have !== want) {
+    lines.push(['warn', `<b>Your extension is out of date</b> (v${esc(have)}, latest v${esc(want)}). Go to <code>chrome://extensions</code>, remove TCGBot Quick Checkout and <b>Load unpacked</b> the folder below again — then reload the store tab.`]);
+  } else {
+    lines.push(['ok', `✓ TCGBot extension v${esc(have)} is installed in this browser — ⚡ Buy runs automatically.`]);
+  }
+  const addr = p.email && p.firstName && p.address1 && p.suburb && p.state && p.postcode;
+  const card = !S.vault.exists ? 'no card saved (you\'ll type it at checkout)' : S.vault.unlocked ? `card ••${esc(S.vault.last4)} ✓` : '<b>card locked</b> — unlock it in Profile &amp; payment to have it filled in';
+  lines.push([addr && S.vault.unlocked ? 'ok' : 'warn', `Checkout autofill: ${addr ? 'address ✓' : '<b>address missing</b> — add it in Profile &amp; payment'} · ${card}`]);
+  $('#quick-status').innerHTML = lines.map(([cls, html]) => `<div class="qs ${cls}">${html}</div>`).join('');
+}
+
 function renderQuick() {
   const q = S.quick;
   if (!q) return;
   $('#ext-path').textContent = q.extensionPath || '';
+  renderQuickStatus();
   refreshBookmarklet();
   $('#quick-count').textContent = `${q.products.filter((p) => p.enabled).length} active`;
   $('#quick-list').innerHTML = q.products.map((p, i) => `
@@ -372,7 +396,8 @@ $('#quick-list').addEventListener('click', async (ev) => {
       } else {
         toast({ level: 'warning', title: 'Your browser blocked the new tab', message: 'Allow pop-ups for 127.0.0.1, or use this link within 2 minutes:', url: r.url }, 0);
       }
-      toast({ level: 'info', title: `⚡ Buying ${p.name} ×${r.quantity}`, message: 'The TCGBot extension adds it to your bag and goes to checkout in the new tab.' }, 5000);
+      if (extensionVersion()) toast({ level: 'info', title: `⚡ Buying ${p.name} ×${r.quantity}`, message: 'Watch the new tab: quantity → add to bag → checkout → your details. You press the final button.' }, 5000);
+      else toast({ level: 'warning', title: 'The extension isn\'t in this browser', message: 'The page opened, but nothing will happen automatically. Use the browser where you loaded the TCGBot extension, or click your bookmark button.' }, 9000);
     } catch (e) {
       if (w) w.close();
       toast({ level: 'error', title: 'Something went wrong', message: e.message });
@@ -698,6 +723,7 @@ $('#profile-form').addEventListener('submit', async (ev) => {
   try {
     S.profile = await api('PUT', '/api/profile', body);
     $('#profile-msg').textContent = 'Saved ✓';
+    renderQuickStatus();
     renderSetupBanner();
   } catch (e) {
     $('#profile-msg').innerHTML = `<span class="error">${esc(e.message)}</span>`;
@@ -705,6 +731,7 @@ $('#profile-form').addEventListener('submit', async (ev) => {
 });
 
 function renderVault() {
+  if (S.quick) renderQuickStatus();
   const v = S.vault;
   const body = $('#vault-body');
   if (body.dataset.state === JSON.stringify(v)) return;

@@ -75,6 +75,11 @@ export async function startMockStore({ port = 0, cardPort = 0, host = '127.0.0.1
     orders: [],
     challenge: false,
     blockNonBrowsers,
+    // Kmart-style one-page checkout (Order summary → Details → Delivery → Payment).
+    checkoutStyle: 'generic',
+    cardInIframe: false,
+    account: null, // {email, firstName, lastName, phone} = "logged in", details pre-filled
+    kmart: { steps: [] },
     requests: [],
     shopify: {
       products: [
@@ -90,12 +95,80 @@ export async function startMockStore({ port = 0, cardPort = 0, host = '127.0.0.1
 
   const find = (sku) => state.products.find((p) => p.sku === sku);
 
+  function kmartCheckout() {
+    const acc = state.account || {};
+    const total = state.cart.reduce((sum, c) => sum + c.price * c.qty, 0);
+    const v = (x) => esc(x || '');
+    const cardFields = state.cardInIframe
+      ? `<iframe id="kcard" src="${cardOrigin}/card-frame?style=kmart" width="360" height="190" style="border:1px solid #ccc"></iframe>`
+      : `<p><b>Pay with credit or debit card</b></p>
+         <label>Card number <input name="cardNumber" inputmode="numeric"></label>
+         <label>Expiry <input name="cardExpiry" placeholder="MM/YY"></label>
+         <label>CVV <input name="cardCvv" inputmode="numeric"></label>`;
+    return `<h1>Checkout</h1>
+      <section id="k-summary"><h2>Order Summary</h2><p>Products $${total.toFixed(2)}</p><p>Total Delivery to Cheltenham 3192 $10.00</p>
+        <div class="carousel"><div class="tile">Bubble Round Platter <button type="button">+ Add</button></div></div>
+        <button type="button" id="k-to-details">Continue to details</button></section>
+      <section id="k-details" hidden><h2>② Details</h2>
+        <p>Welcome. Your saved details (if available) will be put into the checkout.</p>
+        <label>Email* <input name="email" type="email" required value="${v(acc.email)}"></label>
+        <label>First Name* <input name="firstName" required value="${v(acc.firstName)}"></label>
+        <label>Last Name* <input name="lastName" required value="${v(acc.lastName)}"></label>
+        <label>Mobile number* <input name="mobile" type="tel" required value="${v(acc.phone)}"></label>
+        <label><input type="checkbox" name="kmail"> Signup to Kmail</label>
+        <label><input type="checkbox" name="review"> Review purchased products</label>
+        <button type="button" id="k-to-delivery">Continue to delivery</button></section>
+      <section id="k-delivery" hidden><h2>③ Delivery</h2>
+        <label><input type="radio" name="method" value="cc"> Click &amp; Collect</label>
+        <label><input type="radio" name="method" value="home"> Home delivery</label>
+        <label>Street address* <input name="address1" required></label>
+        <label>Apartment, unit, etc. (optional) <input name="address2"></label>
+        <label>Suburb* <input name="suburb" required></label>
+        <label>State* <select name="state" required><option value="">Select state</option><option value="NSW">New South Wales</option><option value="VIC">Victoria</option><option value="QLD">Queensland</option><option value="WA">Western Australia</option><option value="SA">South Australia</option><option value="TAS">Tasmania</option><option value="ACT">Australian Capital Territory</option><option value="NT">Northern Territory</option></select></label>
+        <label>Postcode* <input name="postcode" required maxlength="4"></label>
+        <button type="button" id="k-to-payment">Continue to payment</button></section>
+      <section id="k-payment" hidden><h2>④ Payment</h2><p>Select a payment method</p>
+        <label><input type="radio" name="pay" value="card" checked> Credit or debit card</label>
+        <label><input type="radio" name="pay" value="paypal"> PayPal</label>
+        <label><input type="radio" name="pay" value="paypal4"> PayPal Pay in 4</label>
+        <label><input type="radio" name="pay" value="applepay"> Apple Pay</label>
+        <label><input type="radio" name="pay" value="afterpay"> afterpay</label>
+        <label><input type="radio" name="pay" value="zip"> zip</label>
+        ${cardFields}
+        <p><button type="button" id="k-place">Checkout securely</button></p></section>
+      <p id="k-error" class="err"></p>
+      <script>
+        const data = (sec) => Object.fromEntries([...sec.querySelectorAll('input,select')].map((i) => [i.name, i.type === 'checkbox' || i.type === 'radio' ? (i.checked ? (i.value || true) : undefined) : i.value]).filter(([, x]) => x !== undefined));
+        const step = (name, sec, next) => {
+          const missing = [...sec.querySelectorAll('[required]')].filter((i) => !i.value);
+          if (name === 'delivery' && !sec.querySelector('input[name=method]:checked')) missing.push({ name: 'method' });
+          if (missing.length) { document.getElementById('k-error').textContent = 'Please complete: ' + missing.map((m) => m.name).join(', '); return; }
+          document.getElementById('k-error').textContent = '';
+          fetch('/api/kcheckout/step', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step: name, data: data(sec) }) });
+          sec.querySelector('button[id^=k-to]').remove();
+          setTimeout(() => { next.hidden = false; }, 300);
+        };
+        const $ = (id) => document.getElementById(id);
+        $('k-to-details').addEventListener('click', () => step('summary', $('k-summary'), $('k-details')));
+        $('k-to-delivery').addEventListener('click', () => step('details', $('k-details'), $('k-delivery')));
+        $('k-to-payment').addEventListener('click', () => step('delivery', $('k-delivery'), $('k-payment')));
+        $('k-place').addEventListener('click', async () => {
+          await fetch('/checkout/kplace', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data($('k-payment'))) });
+          location.href = '/checkout/confirmation';
+        });
+        for (const el of document.querySelectorAll('input[name=cardNumber]')) el.addEventListener('input', () => { el.value = el.value.replace(/\\D/g, '').slice(0, 16).replace(/(\\d{4})(?=\\d)/g, '$1 '); });
+        for (const el of document.querySelectorAll('input[name=cardExpiry]')) el.addEventListener('input', () => { const d = el.value.replace(/\\D/g, '').slice(0, 4); el.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d; });
+      </script>`;
+  }
+
   // ------------------------------------------------------------------ card iframe server
   const cardServer = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     if (u.pathname === '/card-frame') {
       const style = u.searchParams.get('style') || 'stripe';
-      const fields = style === 'shopify'
+      const fields = style === 'kmart'
+        ? '<label>Card number <input name="encryptedCardNumber" aria-label="Card number" inputmode="numeric"></label><label>Expiry <input name="encryptedExpiryDate" aria-label="Expiry date" placeholder="MM/YY"></label><label>CVV <input name="encryptedSecurityCode" aria-label="CVV" inputmode="numeric"></label>'
+        : style === 'shopify'
         ? '<input name="number" placeholder="Card number" inputmode="numeric"><input name="name" placeholder="Name on card"><input name="expiry" placeholder="Expiration date (MM / YY)"><input name="verification_value" placeholder="Security code" inputmode="numeric">'
         : '<input name="cardnumber" autocomplete="cc-number" placeholder="Card number" inputmode="numeric"><input name="exp-date" autocomplete="cc-exp" placeholder="MM / YY"><input name="cvc" autocomplete="cc-csc" placeholder="CVC" inputmode="numeric"><input name="ccname" placeholder="Name on card">';
       res.writeHead(200, { 'content-type': 'text/html' });
@@ -179,7 +252,8 @@ for (const el of document.querySelectorAll('input')) {
           <p>SKU ${prod.sku}</p>
           ${prod.qtyStyle === 'stepper'
     ? '<div class="qty-stepper">Qty <button type="button" aria-label="Decrease quantity" id="qminus">−</button> <span id="qval">1</span> <button type="button" aria-label="Increase quantity" id="qplus">+</button></div>'
-    : prod.qtyStyle === 'none' ? '' : '<label>Qty <input name="quantity" type="number" value="1" min="1" style="width:60px"></label>'}
+    : prod.qtyStyle === 'none' ? '' : `<label>Qty <input name="quantity" type="number" value="1" min="1" ${prod.maxQty ? `max="${prod.maxQty}"` : ''} style="width:60px"></label>`}
+          ${prod.otherPanel ? '<div id="tcgbot-quick-checkout" style="position:fixed;right:0;bottom:0;background:#eee">Old Tampermonkey panel</div>' : ''}
           <div id="buybox">${prod.lateMs ? '<p>Loading…</p>' : BUTTON[prod.status]}</div>
         </div>
         <section class="recommendations"><h3>You may also like</h3>
@@ -190,7 +264,7 @@ for (const el of document.querySelectorAll('input')) {
         <script>
           ${prod.lateMs ? `setTimeout(() => { document.getElementById('buybox').innerHTML = ${JSON.stringify(BUTTON[prod.status])}; }, ${Number(prod.lateMs)});` : ''}
           const qval = document.getElementById('qval');
-          document.getElementById('qplus')?.addEventListener('click', () => { qval.textContent = String(Math.min(5, Number(qval.textContent) + 1)); });
+          document.getElementById('qplus')?.addEventListener('click', () => { qval.textContent = String(Math.min(${Number(prod.maxQty) || 5}, Number(qval.textContent) + 1)); });
           document.getElementById('qminus')?.addEventListener('click', () => { qval.textContent = String(Math.max(1, Number(qval.textContent) - 1)); });
           document.addEventListener('click', async (e) => {
             if (!e.target.closest('#atc')) return;
@@ -200,7 +274,7 @@ for (const el of document.querySelectorAll('input')) {
             const d = await r.json();
             if (d.ok && ${prod.drawer !== false}) { setTimeout(() => { document.getElementById('drawer-msg').textContent = d.count + ' item(s) in cart'; document.getElementById('drawer').classList.add('open'); }, 150); }
           });
-        </script>`, { head: ld }));
+        </script>`, { head: ld + (prod.stripHash ? '<script>history.replaceState(null, "", location.pathname + location.search);</script>' : '') }));
     }
     if (p.startsWith('/fake/recaptcha/')) return html(200, '<html><body><h3>I\'m not a robot (fake)</h3></body></html>');
 
@@ -217,12 +291,41 @@ for (const el of document.querySelectorAll('input')) {
       const b = await parseBody(req);
       const prod = find(b.sku);
       if (!prod || !prod.listed || !(prod.status === 'in_stock' || prod.status === 'preorder')) return json(409, { ok: false, error: 'unavailable' });
-      state.cart.push({ sku: prod.sku, qty: Number(b.qty) || 1, price: prod.price });
+      const max = Number(prod.maxQty) || 10;
+      const line = state.cart.find((c) => c.sku === prod.sku);
+      if (line) line.qty = Math.min(max, line.qty + (Number(b.qty) || 1));
+      else state.cart.push({ sku: prod.sku, qty: Math.min(max, Number(b.qty) || 1), price: prod.price });
       return json(200, { ok: true, count: state.cart.length });
     }
+    if (p === '/api/cart/update' && req.method === 'POST') {
+      const b = await parseBody(req);
+      const line = state.cart.find((c) => c.sku === b.sku);
+      if (!line) return json(404, { ok: false });
+      line.qty = Math.max(1, Math.min(Number(find(b.sku)?.maxQty) || 10, Number(b.qty) || 1));
+      return json(200, { ok: true, qty: line.qty });
+    }
     if (p === '/cart') {
-      const rows = state.cart.map((c) => `<li>${esc(find(c.sku)?.name)} × ${c.qty}</li>`).join('');
-      return html(200, page('Your cart', `<h1>Your cart</h1><ul>${rows || '<li>Empty</li>'}</ul><a href="/" class="continue">Continue shopping</a> ${state.cart.length ? '<a class="btn" href="/checkout">Secure Checkout</a>' : ''}`));
+      const rows = state.cart.map((c) => {
+        const prod = find(c.sku);
+        const max = Number(prod?.maxQty) || 10;
+        const opts = Array.from({ length: max }, (_, i) => `<option value="${i + 1}" ${i + 1 === c.qty ? 'selected' : ''}>${i + 1}</option>`).join('');
+        return `<li class="line-item"><div class="line-name"><a href="${prod ? productPath(prod) : '#'}">${esc(prod?.name)}</a></div><div class="line-qty">Qty <select aria-label="Quantity" data-sku="${c.sku}">${opts}</select></div></li>`;
+      }).join('');
+      return html(200, page('Your cart', `<h1>Your cart</h1><ul class="lines">${rows || '<li>Empty</li>'}</ul><a href="/" class="continue">Continue shopping</a> ${state.cart.length ? '<a class="btn" href="/checkout">Secure Checkout</a>' : ''}
+        <script>for (const s of document.querySelectorAll('select[data-sku]')) s.addEventListener('change', () => fetch('/api/cart/update', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sku: s.dataset.sku, qty: Number(s.value) }) }));</script>`));
+    }
+    if (p === '/checkout' && state.checkoutStyle === 'kmart') return html(200, page('Checkout', kmartCheckout()));
+    if (p === '/api/kcheckout/step' && req.method === 'POST') {
+      const b = await parseBody(req);
+      state.kmart.steps.push(b);
+      state.kmart[b.step] = b.data;
+      return json(200, { ok: true });
+    }
+    if (p === '/checkout/kplace' && req.method === 'POST') {
+      const b = await parseBody(req);
+      state.orders.push({ cart: state.cart.slice(), kmart: { ...state.kmart }, form: b, ts: Date.now() });
+      state.cart = [];
+      return json(200, { ok: true });
     }
     if (p === '/checkout') return redirect('/checkout/login');
     if (p === '/checkout/login') {
